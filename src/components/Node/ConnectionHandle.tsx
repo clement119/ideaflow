@@ -6,20 +6,31 @@ import { newId } from '../../utils/ids';
 import { DEFAULT_NODE_COLOUR } from '../../utils/colours';
 import { screenToCanvas } from '../../utils/viewport';
 
+type Side = 'left' | 'right' | 'top' | 'bottom';
+
 interface Props {
   node: INode;
   svgRef: React.RefObject<SVGSVGElement | null>;
+  side: Side;
 }
 
-export function ConnectionHandle({ node, svgRef }: Props) {
+function getHandlePos(node: INode, side: Side): { cx: number; cy: number } {
+  switch (side) {
+    case 'right':  return { cx: node.width + 8,    cy: node.height / 2 };
+    case 'left':   return { cx: -8,                cy: node.height / 2 };
+    case 'top':    return { cx: node.width / 2,    cy: -8              };
+    case 'bottom': return { cx: node.width / 2,    cy: node.height + 8 };
+  }
+}
+
+export function ConnectionHandle({ node, svgRef, side }: Props) {
   const dragging = useRef(false);
   const setCursorMode = useStore(s => s.setCursorMode);
   const setDraftEdge = useStore(s => s.setDraftEdge);
   const execute = useStore(s => s.execute);
   const transform = useStore(s => s.canvasTransform);
 
-  const cx = node.width + 8;
-  const cy = node.height / 2;
+  const { cx, cy } = getHandlePos(node, side);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     e.stopPropagation();
@@ -85,12 +96,12 @@ export function ConnectionHandle({ node, svgRef }: Props) {
         fill="rgba(99,102,241,0.15)"
         stroke="#6366f1"
         strokeWidth={1.5}
-        style={{ cursor: `url("${undefined}") 16 16, crosshair` }}
+        style={{ cursor: 'crosshair' }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
       />
-      <circle cx={cx} cy={cy} r={3} fill="#6366f1" />
+      <circle cx={cx} cy={cy} r={3} fill="#6366f1" pointerEvents="none" />
     </g>
   );
 }

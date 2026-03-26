@@ -181,9 +181,14 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
           </foreignObject>
         )}
 
-        {/* Connection handle (only when hovered and not editing) */}
+        {/* Connection handles on all 4 sides (only when hovered and not editing) */}
         {hovered && !editing && (
-          <ConnectionHandle node={node} svgRef={svgRef} />
+          <>
+            <ConnectionHandle node={node} svgRef={svgRef} side="right" />
+            <ConnectionHandle node={node} svgRef={svgRef} side="left" />
+            <ConnectionHandle node={node} svgRef={svgRef} side="top" />
+            <ConnectionHandle node={node} svgRef={svgRef} side="bottom" />
+          </>
         )}
 
         {/* Resize handle (only when selected) */}
