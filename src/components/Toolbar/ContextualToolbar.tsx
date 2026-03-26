@@ -3,7 +3,6 @@ import { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useIsMobile } from '../../hooks/useMobile';
 import { useStore } from '../../store/store';
-import { canvasToScreen } from '../../utils/viewport';
 import { computeBoundingBox } from '../../utils/geometry';
 import {
   DeleteNodeCommand, EditNodeCommand, DuplicateNodeCommand,
@@ -24,7 +23,6 @@ export function ContextualToolbar({ svgRef }: Props) {
   const nodes = useStore(s => s.nodes);
   const edges = useStore(s => s.edges);
   const clusters = useStore(s => s.clusters);
-  const transform = useStore(s => s.canvasTransform);
   const cursorMode = useStore(s => s.cursorMode);
   const execute = useStore(s => s.execute);
   const clearSelection = useStore(s => s.clearSelection);
@@ -56,37 +54,9 @@ export function ContextualToolbar({ svgRef }: Props) {
 
   if (!hasSelection || !svgRef.current || cursorMode === 'drag-node') return null;
 
-  const svgRect = svgRef.current.getBoundingClientRect();
-
-  // Compute toolbar position
-  let toolbarX = 0, toolbarY = 0;
-  if (nodeIds.length > 0) {
-    const bbox = computeBoundingBox(nodeIds, nodes);
-    const screen = canvasToScreen(bbox.x + bbox.width / 2, bbox.y - 12, transform, svgRect);
-    toolbarX = screen.x;
-    toolbarY = screen.y;
-  } else if (edgeIds.length > 0) {
-    const edge = edges[edgeIds[0]];
-    if (edge) {
-      const src = nodes[edge.sourceId];
-      if (src) {
-        const screen = canvasToScreen(src.x + src.width / 2, src.y - 12, transform, svgRect);
-        toolbarX = screen.x;
-        toolbarY = screen.y;
-      }
-    }
-  } else if (clusterId) {
-    const cluster = clusters[clusterId];
-    if (cluster) {
-      const screen = canvasToScreen(cluster.x, cluster.y - 40, transform, svgRect);
-      toolbarX = screen.x;
-      toolbarY = screen.y;
-    }
-  }
-
-  // Clamp to viewport
-  toolbarX = Math.max(80, Math.min(window.innerWidth - 80, toolbarX));
-  toolbarY = Math.max(60, toolbarY);
+  // Always anchor to top-centre of the screen
+  const toolbarX = window.innerWidth / 2 + userOffset.x;
+  const toolbarY = 16 + userOffset.y;
 
   const btn = (label: string, onClick: () => void, variant: 'default' | 'danger' = 'default') => (
     <button
@@ -254,8 +224,8 @@ export function ContextualToolbar({ svgRef }: Props) {
           transition={{ duration: 0.15 }}
           style={{
             position: 'fixed',
-            left: toolbarX + userOffset.x,
-            top: toolbarY + userOffset.y,
+            left: toolbarX,
+            top: toolbarY,
             transform: 'translateX(-50%)',
             background: 'white',
             border: '1px solid #e5e7eb',
