@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom';
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useIsMobile } from '../../hooks/useMobile';
 import { useStore } from '../../store/store';
@@ -18,7 +18,7 @@ interface Props {
   svgRef: React.RefObject<SVGSVGElement | null>;
 }
 
-export function ContextualToolbar({ svgRef }: Props) {
+export function ContextualToolbar({ svgRef: _svgRef }: Props) {
   const selection = useStore(s => s.selection);
   const nodes = useStore(s => s.nodes);
   const edges = useStore(s => s.edges);
@@ -32,31 +32,41 @@ export function ContextualToolbar({ svgRef }: Props) {
   const { nodeIds, edgeIds, clusterId } = selection;
   const hasSelection = nodeIds.length > 0 || edgeIds.length > 0 || clusterId !== null;
 
-  // Drag-to-reposition state
+  // Dock state — persists across selection changes
+  const [isDocked, setIsDocked] = useState(true);
+  const [floatPos, setFloatPos] = useState({ x: 0, y: 0 });
+  const toolbarRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
-  const [userOffset, setUserOffset] = useState({ x: 0, y: 0 });
-  const selectionKey = [...nodeIds, ...edgeIds, clusterId ?? ''].join(',');
-  useEffect(() => { setUserOffset({ x: 0, y: 0 }); }, [selectionKey]);
 
   const handleDragPointerDown = (e: React.PointerEvent) => {
     e.stopPropagation();
-    dragRef.current = { startX: e.clientX, startY: e.clientY, originX: userOffset.x, originY: userOffset.y };
+    // Capture current rendered position as the drag origin
+    const rect = toolbarRef.current?.getBoundingClientRect();
+    const originX = rect ? rect.left + rect.width / 2 : window.innerWidth / 2;
+    const originY = rect ? rect.top : window.innerHeight - 80;
+    if (isDocked) {
+      setIsDocked(false);
+      setFloatPos({ x: originX, y: originY });
+    }
+    dragRef.current = {
+      startX: e.clientX, startY: e.clientY,
+      originX: isDocked ? originX : floatPos.x,
+      originY: isDocked ? originY : floatPos.y,
+    };
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   };
+
   const handleDragPointerMove = (e: React.PointerEvent) => {
     if (!dragRef.current) return;
-    setUserOffset({
+    setFloatPos({
       x: dragRef.current.originX + (e.clientX - dragRef.current.startX),
       y: dragRef.current.originY + (e.clientY - dragRef.current.startY),
     });
   };
+
   const handleDragPointerUp = () => { dragRef.current = null; };
 
-  if (!hasSelection || !svgRef.current || cursorMode === 'drag-node') return null;
-
-  // Always anchor to top-centre of the screen
-  const toolbarX = window.innerWidth / 2 + userOffset.x;
-  const toolbarY = 16 + userOffset.y;
+  if (!hasSelection || cursorMode === 'drag-node') return null;
 
   const btn = (label: string, onClick: () => void, variant: 'default' | 'danger' = 'default') => (
     <button
@@ -87,7 +97,6 @@ export function ContextualToolbar({ svgRef }: Props) {
 
     content = (
       <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap', maxWidth: 320 }}>
-        {/* Colour swatches */}
         {NODE_COLOURS.map(c => (
           <div
             key={c}
@@ -100,7 +109,6 @@ export function ContextualToolbar({ svgRef }: Props) {
           />
         ))}
         <div style={{ width: 1, height: 20, background: '#e5e7eb' }} />
-        {/* Type switcher */}
         {(['default', 'idea', 'note'] as NodeType[]).map(t => (
           btn(t, () => execute(new EditNodeCommand(node.id, { type: node.type }, { type: t })))
         ))}
@@ -213,38 +221,46 @@ export function ContextualToolbar({ svgRef }: Props) {
     );
   }
 
+  // Docked: centred at bottom. Undocked: free-float at floatPos.
+  const positionStyle: React.CSSProperties = isDocked
+    ? { bottom: 20, left: '50%' }
+    : { top: floatPos.y, left: floatPos.x };
+
   return createPortal(
     <AnimatePresence>
       {hasSelection && (
         <motion.div
+          ref={toolbarRef}
           key="toolbar"
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 4 }}
+          initial={{ opacity: 0, y: isDocked ? 12 : -8, scale: 0.96 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.94 }}
           transition={{ duration: 0.15 }}
           style={{
             position: 'fixed',
-            left: toolbarX,
-            top: toolbarY,
             transform: 'translateX(-50%)',
+            ...positionStyle,
             background: 'white',
             border: '1px solid #e5e7eb',
             borderRadius: 10,
             padding: '6px 8px',
-            boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+            boxShadow: isDocked
+              ? '0 -2px 20px rgba(0,0,0,0.10), 0 4px 16px rgba(0,0,0,0.08)'
+              : '0 4px 20px rgba(0,0,0,0.16)',
             zIndex: 1000,
             display: 'flex',
             alignItems: 'center',
             gap: 4,
           }}
         >
-          {/* Drag handle */}
+          {/* Drag handle — dragging undocks the toolbar */}
           <div
             onPointerDown={handleDragPointerDown}
             onPointerMove={handleDragPointerMove}
             onPointerUp={handleDragPointerUp}
+            title={isDocked ? 'Drag to undock' : 'Drag to reposition'}
             style={{
-              cursor: dragRef.current ? 'grabbing' : 'grab',
+              cursor: 'grab',
               padding: '0 2px',
               color: '#d1d5db',
               fontSize: 13,
@@ -252,11 +268,40 @@ export function ContextualToolbar({ svgRef }: Props) {
               userSelect: 'none',
               flexShrink: 0,
             }}
-            title="Drag to reposition"
           >
             ⠿
           </div>
-          <div style={{ width: 1, height: 20, background: '#e5e7eb', flexShrink: 0 }} />
+
+          {/* Re-dock button — only visible when floating */}
+          {!isDocked && (
+            <>
+              <button
+                onClick={() => setIsDocked(true)}
+                title="Dock to bottom"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 22,
+                  height: 22,
+                  border: 'none',
+                  borderRadius: 5,
+                  background: '#f3f4f6',
+                  color: '#6b7280',
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  flexShrink: 0,
+                  padding: 0,
+                }}
+              >
+                ⊻
+              </button>
+              <div style={{ width: 1, height: 20, background: '#e5e7eb', flexShrink: 0 }} />
+            </>
+          )}
+
+          {isDocked && <div style={{ width: 1, height: 20, background: '#e5e7eb', flexShrink: 0 }} />}
+
           {content}
         </motion.div>
       )}
