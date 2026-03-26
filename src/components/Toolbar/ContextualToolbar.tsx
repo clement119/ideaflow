@@ -1,4 +1,5 @@
 import { createPortal } from 'react-dom';
+import { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useStore } from '../../store/store';
 import { canvasToScreen } from '../../utils/viewport';
@@ -30,6 +31,26 @@ export function ContextualToolbar({ svgRef }: Props) {
 
   const { nodeIds, edgeIds, clusterId } = selection;
   const hasSelection = nodeIds.length > 0 || edgeIds.length > 0 || clusterId !== null;
+
+  // Drag-to-reposition state
+  const dragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
+  const [userOffset, setUserOffset] = useState({ x: 0, y: 0 });
+  const selectionKey = [...nodeIds, ...edgeIds, clusterId ?? ''].join(',');
+  useEffect(() => { setUserOffset({ x: 0, y: 0 }); }, [selectionKey]);
+
+  const handleDragPointerDown = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    dragRef.current = { startX: e.clientX, startY: e.clientY, originX: userOffset.x, originY: userOffset.y };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+  const handleDragPointerMove = (e: React.PointerEvent) => {
+    if (!dragRef.current) return;
+    setUserOffset({
+      x: dragRef.current.originX + (e.clientX - dragRef.current.startX),
+      y: dragRef.current.originY + (e.clientY - dragRef.current.startY),
+    });
+  };
+  const handleDragPointerUp = () => { dragRef.current = null; };
 
   if (!hasSelection || !svgRef.current || cursorMode === 'drag-node') return null;
 
@@ -231,13 +252,13 @@ export function ContextualToolbar({ svgRef }: Props) {
           transition={{ duration: 0.15 }}
           style={{
             position: 'fixed',
-            left: toolbarX,
-            top: toolbarY,
+            left: toolbarX + userOffset.x,
+            top: toolbarY + userOffset.y,
             transform: 'translateX(-50%)',
             background: 'white',
             border: '1px solid #e5e7eb',
             borderRadius: 10,
-            padding: '6px 10px',
+            padding: '6px 8px',
             boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
             zIndex: 1000,
             display: 'flex',
@@ -245,6 +266,25 @@ export function ContextualToolbar({ svgRef }: Props) {
             gap: 4,
           }}
         >
+          {/* Drag handle */}
+          <div
+            onPointerDown={handleDragPointerDown}
+            onPointerMove={handleDragPointerMove}
+            onPointerUp={handleDragPointerUp}
+            style={{
+              cursor: dragRef.current ? 'grabbing' : 'grab',
+              padding: '0 2px',
+              color: '#d1d5db',
+              fontSize: 13,
+              lineHeight: 1,
+              userSelect: 'none',
+              flexShrink: 0,
+            }}
+            title="Drag to reposition"
+          >
+            ⠿
+          </div>
+          <div style={{ width: 1, height: 20, background: '#e5e7eb', flexShrink: 0 }} />
           {content}
         </motion.div>
       )}
