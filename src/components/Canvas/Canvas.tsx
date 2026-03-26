@@ -45,18 +45,17 @@ export function Canvas() {
 
   // ─── Pan ────────────────────────────────────────────────────────────────────
   const handlePointerDown = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
-    if (e.target !== svgRef.current && (e.target as SVGElement).id !== 'canvas-bg') return;
-    if (cursorMode === 'pan-idle' || cursorMode === 'pan-drag') {
-      panRef.current = {
-        startX: e.clientX,
-        startY: e.clientY,
-        originX: transform.x,
-        originY: transform.y,
-      };
-      setCursorMode('pan-drag');
-      (e.target as SVGElement).setPointerCapture(e.pointerId);
-    }
-  }, [cursorMode, transform, setCursorMode]);
+    const onBg = (e.target as SVGElement).id === 'canvas-bg' || e.target === svgRef.current;
+    if (!onBg) return;
+    panRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      originX: transform.x,
+      originY: transform.y,
+    };
+    setCursorMode('pan-drag');
+    (e.target as SVGElement).setPointerCapture(e.pointerId);
+  }, [transform, setCursorMode]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
     if (!panRef.current) return;
@@ -72,7 +71,7 @@ export function Canvas() {
   const handlePointerUp = useCallback(() => {
     if (panRef.current) {
       panRef.current = null;
-      setCursorMode('pan-idle');
+      setCursorMode('idle');
     }
   }, [setCursorMode]);
 

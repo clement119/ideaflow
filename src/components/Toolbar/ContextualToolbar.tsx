@@ -23,6 +23,7 @@ export function ContextualToolbar({ svgRef }: Props) {
   const edges = useStore(s => s.edges);
   const clusters = useStore(s => s.clusters);
   const transform = useStore(s => s.canvasTransform);
+  const cursorMode = useStore(s => s.cursorMode);
   const execute = useStore(s => s.execute);
   const clearSelection = useStore(s => s.clearSelection);
   const setSelection = useStore(s => s.setSelection);
@@ -30,7 +31,7 @@ export function ContextualToolbar({ svgRef }: Props) {
   const { nodeIds, edgeIds, clusterId } = selection;
   const hasSelection = nodeIds.length > 0 || edgeIds.length > 0 || clusterId !== null;
 
-  if (!hasSelection || !svgRef.current) return null;
+  if (!hasSelection || !svgRef.current || cursorMode === 'drag-node') return null;
 
   const svgRect = svgRef.current.getBoundingClientRect();
 
