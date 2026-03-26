@@ -114,13 +114,9 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
     : <NodeDefault node={node} selected={isSelected} />;
 
   return (
-    <motion.g
+    // Outer plain <g> owns position — never touches Framer Motion so drags are instant
+    <g
       key={node.id}
-      initial={{ scale: 0.6, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      exit={{ scale: 0.8, opacity: 0 }}
-      transition={{ type: 'spring', stiffness: 400, damping: 28, duration: 0.15 }}
-      style={{ transformOrigin: `${node.x + node.width / 2}px ${node.y + node.height / 2}px` }}
       transform={`translate(${node.x}, ${node.y})`}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
@@ -130,63 +126,72 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
       onPointerEnter={() => { setHovered(true); if (!dragRef.current) setCursorMode('hover-node'); }}
       onPointerLeave={() => { setHovered(false); if (!dragRef.current) setCursorMode('idle'); }}
     >
-      {shape}
+      {/* Inner motion.g handles only the spring entrance/exit animation */}
+      <motion.g
+        initial={{ scale: 0.6, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.8, opacity: 0 }}
+        transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+        style={{ transformOrigin: `${node.width / 2}px ${node.height / 2}px` }}
+      >
+        {shape}
 
-      {/* Emoji prefix */}
-      {node.emoji && (
-        <text x={8} y={node.height / 2 + 5} fontSize={14}>{node.emoji}</text>
-      )}
+        {/* Emoji prefix */}
+        {node.emoji && (
+          <text x={8} y={node.height / 2 + 5} fontSize={14}>{node.emoji}</text>
+        )}
 
-      {/* Label (display or edit) */}
-      {!editing ? (
-        <text
-          x={node.width / 2}
-          y={node.height / 2 + 1}
-          textAnchor="middle"
-          dominantBaseline="middle"
-          fontSize={13}
-          fill="#374151"
-          fontFamily="system-ui, sans-serif"
-          style={{ pointerEvents: 'none', userSelect: 'none' }}
-        >
-          {node.label || (isSelected ? '' : <tspan fill="#9ca3af">...</tspan>)}
-        </text>
-      ) : (
-        <foreignObject x={4} y={4} width={node.width - 8} height={node.height - 8}>
-          <input
-            autoFocus
-            value={labelDraft}
-            onChange={e => setLabelDraft(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter') { e.preventDefault(); confirmEdit(); }
-              if (e.key === 'Escape') { setEditing(false); setCursorMode('idle'); }
-            }}
-            onBlur={confirmEdit}
-            style={{
-              width: '100%',
-              height: '100%',
-              border: 'none',
-              background: 'transparent',
-              outline: 'none',
-              textAlign: 'center',
-              fontSize: 13,
-              fontFamily: 'system-ui, sans-serif',
-              color: '#374151',
-            }}
-          />
-        </foreignObject>
-      )}
+        {/* Label (display or edit) */}
+        {!editing ? (
+          <text
+            x={node.width / 2}
+            y={node.height / 2 + 1}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fontSize={13}
+            fill="#374151"
+            fontFamily="system-ui, sans-serif"
+            style={{ pointerEvents: 'none', userSelect: 'none' }}
+          >
+            {node.label || (isSelected ? '' : <tspan fill="#9ca3af">...</tspan>)}
+          </text>
+        ) : (
+          <foreignObject x={4} y={4} width={node.width - 8} height={node.height - 8}>
+            <input
+              autoFocus
+              value={labelDraft}
+              onChange={e => setLabelDraft(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') { e.preventDefault(); confirmEdit(); }
+                if (e.key === 'Escape') { setEditing(false); setCursorMode('idle'); }
+              }}
+              onBlur={confirmEdit}
+              style={{
+                width: '100%',
+                height: '100%',
+                border: 'none',
+                background: 'transparent',
+                outline: 'none',
+                textAlign: 'center',
+                fontSize: 13,
+                fontFamily: 'system-ui, sans-serif',
+                color: '#374151',
+              }}
+            />
+          </foreignObject>
+        )}
 
-      {/* Connection handle (only when hovered and not editing) */}
-      {hovered && !editing && (
-        <ConnectionHandle node={node} svgRef={svgRef} />
-      )}
+        {/* Connection handle (only when hovered and not editing) */}
+        {hovered && !editing && (
+          <ConnectionHandle node={node} svgRef={svgRef} />
+        )}
 
-      {/* Resize handle (only when selected) */}
-      {isSelected && !editing && (
-        <ResizeHandle node={node} />
-      )}
-    </motion.g>
+        {/* Resize handle (only when selected) */}
+        {isSelected && !editing && (
+          <ResizeHandle node={node} />
+        )}
+      </motion.g>
+    </g>
   );
 }
 
