@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import type { INode } from '../../store/types';
 import { useStore } from '../../store/store';
 import { ResizeNodeCommand } from '../../store/commands';
+import { useIsMobile } from '../../hooks/useMobile';
 
 interface Props {
   node: INode;
@@ -15,6 +16,7 @@ export function ResizeHandle({ node }: Props) {
 
   const execute = useStore(s => s.execute);
   const setCursorMode = useStore(s => s.setCursorMode);
+  const isMobile = useIsMobile();
 
   const handlePointerDown = (e: React.PointerEvent) => {
     e.stopPropagation();
@@ -47,19 +49,40 @@ export function ResizeHandle({ node }: Props) {
     setCursorMode('idle');
   };
 
+  const hitSize = isMobile ? 32 : 10;
+  const hitOffset = isMobile ? 16 : 6;
+
   return (
-    <rect
-      x={node.width - 6}
-      y={node.height - 6}
-      width={10}
-      height={10}
-      rx={2}
-      fill="#6366f1"
-      opacity={0.7}
-      style={{ cursor: 'se-resize' }}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-    />
+    <g>
+      {/* Visible handle */}
+      <rect
+        x={node.width - 6}
+        y={node.height - 6}
+        width={10}
+        height={10}
+        rx={2}
+        fill="#6366f1"
+        opacity={0.7}
+        style={{ cursor: 'se-resize' }}
+        pointerEvents={isMobile ? 'none' : 'auto'}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+      />
+      {/* Larger invisible hit area on touch devices */}
+      {isMobile && (
+        <rect
+          x={node.width - hitOffset}
+          y={node.height - hitOffset}
+          width={hitSize}
+          height={hitSize}
+          fill="transparent"
+          style={{ cursor: 'se-resize' }}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+        />
+      )}
+    </g>
   );
 }

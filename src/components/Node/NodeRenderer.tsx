@@ -8,6 +8,7 @@ import { NodeNote } from './NodeNote';
 import { ResizeHandle } from './ResizeHandle';
 import { ConnectionHandle } from './ConnectionHandle';
 import { EditNodeCommand, MoveNodeCommand } from '../../store/commands';
+import { useIsMobile } from '../../hooks/useMobile';
 
 interface Props {
   svgRef: React.RefObject<SVGSVGElement | null>;
@@ -17,6 +18,7 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
   const [hovered, setHovered] = useState(false);
   const [editing, setEditing] = useState(false);
   const [labelDraft, setLabelDraft] = useState(node.label);
+  const isMobile = useIsMobile();
 
   const dragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
   const didDrag = useRef(false);
@@ -181,8 +183,8 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
           </foreignObject>
         )}
 
-        {/* Connection handles on all 4 sides (only when hovered and not editing) */}
-        {hovered && !editing && (
+        {/* Connection handles: on hover (desktop) or when selected (mobile, no hover state) */}
+        {(isMobile ? isSelected : hovered) && !editing && (
           <>
             <ConnectionHandle node={node} svgRef={svgRef} side="right" />
             <ConnectionHandle node={node} svgRef={svgRef} side="left" />

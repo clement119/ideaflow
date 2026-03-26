@@ -5,6 +5,7 @@ import { AddNodeCommand, AddEdgeCommand } from '../../store/commands';
 import { newId } from '../../utils/ids';
 import { DEFAULT_NODE_COLOUR } from '../../utils/colours';
 import { screenToCanvas } from '../../utils/viewport';
+import { useIsMobile } from '../../hooks/useMobile';
 
 type Side = 'left' | 'right' | 'top' | 'bottom';
 
@@ -30,6 +31,7 @@ export function ConnectionHandle({ node, svgRef, side }: Props) {
   const execute = useStore(s => s.execute);
   const transform = useStore(s => s.canvasTransform);
 
+  const isMobile = useIsMobile();
   const { cx, cy } = getHandlePos(node, side);
 
   const handlePointerDown = (e: React.PointerEvent) => {
@@ -89,10 +91,18 @@ export function ConnectionHandle({ node, svgRef, side }: Props) {
 
   return (
     <g>
+      {/* Invisible larger hit area on touch devices */}
+      {isMobile && (
+        <circle cx={cx} cy={cy} r={20} fill="transparent"
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+        />
+      )}
       <circle
         cx={cx}
         cy={cy}
-        r={8}
+        r={isMobile ? 11 : 8}
         fill="rgba(99,102,241,0.15)"
         stroke="#6366f1"
         strokeWidth={1.5}
@@ -101,7 +111,7 @@ export function ConnectionHandle({ node, svgRef, side }: Props) {
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
       />
-      <circle cx={cx} cy={cy} r={3} fill="#6366f1" pointerEvents="none" />
+      <circle cx={cx} cy={cy} r={isMobile ? 4 : 3} fill="#6366f1" pointerEvents="none" />
     </g>
   );
 }

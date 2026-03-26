@@ -1,6 +1,7 @@
 import { createPortal } from 'react-dom';
 import { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useIsMobile } from '../../hooks/useMobile';
 import { useStore } from '../../store/store';
 import { canvasToScreen } from '../../utils/viewport';
 import { computeBoundingBox } from '../../utils/geometry';
@@ -29,6 +30,7 @@ export function ContextualToolbar({ svgRef }: Props) {
   const clearSelection = useStore(s => s.clearSelection);
   const setSelection = useStore(s => s.setSelection);
 
+  const isMobile = useIsMobile();
   const { nodeIds, edgeIds, clusterId } = selection;
   const hasSelection = nodeIds.length > 0 || edgeIds.length > 0 || clusterId !== null;
 
@@ -91,8 +93,8 @@ export function ContextualToolbar({ svgRef }: Props) {
       key={label}
       onClick={onClick}
       style={{
-        padding: '4px 10px',
-        fontSize: 12,
+        padding: isMobile ? '8px 14px' : '4px 10px',
+        fontSize: isMobile ? 15 : 12,
         fontFamily: 'system-ui',
         border: 'none',
         borderRadius: 6,
