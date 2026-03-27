@@ -262,6 +262,30 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
             />
           )}
         </AnimatePresence>
+
+        {/* Pulsing indicator — shown when note exists but is hidden */}
+        {node.note !== undefined && !node.noteVisible && (
+          <g
+            style={{ cursor: 'pointer' }}
+            onClick={e => {
+              e.stopPropagation();
+              useStore.setState(s => ({
+                nodes: { ...s.nodes, [node.id]: { ...s.nodes[node.id], noteVisible: true } },
+              }));
+            }}
+          >
+            <motion.circle
+              cx={node.width / 2} cy={-10} r={5}
+              fill={node.colour}
+              stroke="#fde68a"
+              strokeWidth={1}
+              animate={{ r: [5, 13, 5], opacity: [0.55, 0, 0.55] }}
+              transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}
+              style={{ pointerEvents: 'none' }}
+            />
+            <circle cx={node.width / 2} cy={-10} r={4} fill={node.colour} stroke="#fde68a" strokeWidth={1.5} />
+          </g>
+        )}
       </motion.g>
     </g>
   );

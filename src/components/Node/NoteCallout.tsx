@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
+import { useStore } from '../../store/store';
 
 interface Props {
   note: string;
@@ -8,14 +9,39 @@ interface Props {
   onHide: () => void;
 }
 
+const MIN_W = 120;
+const MIN_H = 56;
+
 export function NoteCallout({ note, cx, onSave, onHide }: Props) {
   const [draft, setDraft] = useState(note);
+  const [boxW, setBoxW] = useState(168);
+  const [boxH, setBoxH] = useState(76);
+  const zoom = useStore(s => s.canvasTransform.zoom);
 
-  const boxW = 168;
-  const boxH = 76;
+  const resizeRef = useRef<{ startX: number; startY: number; startW: number; startH: number } | null>(null);
+
+  // Tail tip is always at y=-24 (fixed anchor); box grows upward from there
+  const tailY = -24;
+  const boxY = tailY - boxH;
   const boxX = cx - boxW / 2;
-  const boxY = -boxH - 24;
-  const tailY = boxY + boxH;
+
+  const onResizeDown = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    resizeRef.current = { startX: e.clientX, startY: e.clientY, startW: boxW, startH: boxH };
+    (e.currentTarget as SVGElement).setPointerCapture(e.pointerId);
+  };
+
+  const onResizeMove = (e: React.PointerEvent) => {
+    if (!resizeRef.current) return;
+    const dx = (e.clientX - resizeRef.current.startX) / zoom;
+    const dy = (e.clientY - resizeRef.current.startY) / zoom;
+    // Drag right = wider; drag up = taller (box grows upward, so Y is inverted)
+    setBoxW(Math.max(MIN_W, resizeRef.current.startW + dx));
+    setBoxH(Math.max(MIN_H, resizeRef.current.startH - dy));
+  };
+
+  const onResizeUp = () => { resizeRef.current = null; };
 
   return (
     <motion.g
@@ -39,7 +65,7 @@ export function NoteCallout({ note, cx, onSave, onHide }: Props) {
         strokeWidth={1.5}
         strokeLinejoin="round"
       />
-      {/* Seam cover */}
+      {/* Seam cover — hides the stroke where tail meets box bottom */}
       <line x1={boxX + 1} y1={tailY} x2={boxX + boxW - 1} y2={tailY} stroke="#fffbeb" strokeWidth={2.5} />
 
       {/* Hide (×) button */}
@@ -63,6 +89,7 @@ export function NoteCallout({ note, cx, onSave, onHide }: Props) {
           onKeyDown={e => {
             if (e.key === 'Escape') { e.preventDefault(); onHide(); }
           }}
+          onPointerDown={e => e.stopPropagation()}
           placeholder="Add a note…"
           style={{
             width: '100%', height: '100%',
@@ -73,6 +100,21 @@ export function NoteCallout({ note, cx, onSave, onHide }: Props) {
           }}
         />
       </foreignObject>
+
+      {/* Resize handle — bottom-right corner, drag right/up to expand */}
+      <g
+        style={{ cursor: 'nwse-resize' }}
+        onPointerDown={onResizeDown}
+        onPointerMove={onResizeMove}
+        onPointerUp={onResizeUp}
+        onPointerCancel={onResizeUp}
+      >
+        {/* Grip lines */}
+        <line x1={boxX + boxW - 11} y1={tailY - 2} x2={boxX + boxW - 2} y2={tailY - 11} stroke="#fbbf24" strokeWidth={1.5} strokeLinecap="round" />
+        <line x1={boxX + boxW - 6} y1={tailY - 2} x2={boxX + boxW - 2} y2={tailY - 6} stroke="#fbbf24" strokeWidth={1.5} strokeLinecap="round" />
+        {/* Invisible hit area */}
+        <rect x={boxX + boxW - 18} y={tailY - 18} width={18} height={18} fill="transparent" />
+      </g>
     </motion.g>
   );
 }

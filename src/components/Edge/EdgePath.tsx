@@ -152,6 +152,30 @@ export function EdgePath({ edge, bezier }: Props) {
           </g>
         )}
       </AnimatePresence>
+
+      {/* Pulsing indicator — shown when note exists but is hidden */}
+      {edge.note !== undefined && !edge.noteVisible && (
+        <g
+          style={{ cursor: 'pointer' }}
+          onClick={e => {
+            e.stopPropagation();
+            useStore.setState(s => ({
+              edges: { ...s.edges, [edge.id]: { ...s.edges[edge.id], noteVisible: true } },
+            }));
+          }}
+        >
+          <motion.circle
+            cx={bezier.midpoint.x} cy={bezier.midpoint.y} r={5}
+            fill="#fde68a"
+            stroke="#f59e0b"
+            strokeWidth={1}
+            animate={{ r: [5, 13, 5], opacity: [0.55, 0, 0.55] }}
+            transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}
+            style={{ pointerEvents: 'none' }}
+          />
+          <circle cx={bezier.midpoint.x} cy={bezier.midpoint.y} r={4} fill="#fde68a" stroke="#f59e0b" strokeWidth={1.5} />
+        </g>
+      )}
     </g>
   );
 }
