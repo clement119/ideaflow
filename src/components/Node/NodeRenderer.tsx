@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useStore } from '../../store/store';
 import type { INode } from '../../store/types';
@@ -22,6 +22,9 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
 
   const dragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
   const didDrag = useRef(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // Snapshot of label+height taken when editing begins, for undo and cancel
+  const editStartRef = useRef<{ label: string; height: number } | null>(null);
 
   const selection = useStore(s => s.selection);
   const execute = useStore(s => s.execute);
@@ -37,7 +40,10 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
   const wasEmpty = useRef(node.label === '');
   if (wasEmpty.current && isSelected && !editing && node.label === '') {
     wasEmpty.current = false;
-    setTimeout(() => setEditing(true), 50);
+    setTimeout(() => {
+      editStartRef.current = { label: node.label, height: node.height };
+      setEditing(true);
+    }, 50);
   }
 
   const handlePointerDown = (e: React.PointerEvent) => {
@@ -98,15 +104,51 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
 
   const handleDoubleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setEditing(true);
+    editStartRef.current = { label: node.label, height: node.height };
     setLabelDraft(node.label);
+    setEditing(true);
     setCursorMode('text-edit');
   };
 
+  // Measure the textarea and grow node.height to fit content
+  const autoResize = useCallback(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = 'auto';
+    const newHeight = Math.max(40, ta.scrollHeight + 8);
+    ta.style.height = `${ta.scrollHeight}px`;
+    useStore.setState(s => ({
+      nodes: { ...s.nodes, [node.id]: { ...s.nodes[node.id], height: newHeight } },
+    }));
+  }, [node.id]);
+
+  // Size textarea as soon as it mounts (handles pre-existing text)
+  useEffect(() => {
+    if (editing) autoResize();
+  }, [editing, autoResize]);
+
   const confirmEdit = () => {
-    if (labelDraft !== node.label) {
-      execute(new EditNodeCommand(node.id, { label: node.label }, { label: labelDraft }));
+    const snap = editStartRef.current;
+    const currentNode = useStore.getState().nodes[node.id];
+    const from: Partial<typeof node> = { label: snap?.label ?? node.label, height: snap?.height ?? node.height };
+    const to: Partial<typeof node> = { label: labelDraft, height: currentNode?.height ?? node.height };
+    if (from.label !== to.label || from.height !== to.height) {
+      execute(new EditNodeCommand(node.id, from, to));
     }
+    editStartRef.current = null;
+    setEditing(false);
+    setCursorMode('idle');
+  };
+
+  const cancelEdit = () => {
+    // Restore original height if it changed during editing
+    if (editStartRef.current) {
+      useStore.setState(s => ({
+        nodes: { ...s.nodes, [node.id]: { ...s.nodes[node.id], height: editStartRef.current!.height } },
+      }));
+    }
+    setLabelDraft(node.label);
+    editStartRef.current = null;
     setEditing(false);
     setCursorMode('idle');
   };
@@ -143,45 +185,41 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
           <text x={8} y={node.height / 2 + 5} fontSize={14}>{node.emoji}</text>
         )}
 
-        {/* Label (display or edit) */}
-        {!editing ? (
-          <text
-            x={node.width / 2}
-            y={node.height / 2 + 1}
-            textAnchor="middle"
-            dominantBaseline="middle"
-            fontSize={13}
-            fill="#374151"
-            fontFamily="system-ui, sans-serif"
-            style={{ pointerEvents: 'none', userSelect: 'none' }}
-          >
-            {node.label || (isSelected ? '' : <tspan fill="#9ca3af">...</tspan>)}
-          </text>
-        ) : (
-          <foreignObject x={4} y={4} width={node.width - 8} height={node.height - 8}>
-            <input
+        {/* Label — foreignObject for both modes so text wraps naturally */}
+        <foreignObject x={4} y={4} width={node.width - 8} height={node.height - 8}
+          style={{ pointerEvents: editing ? 'auto' : 'none', overflow: 'visible' }}
+        >
+          {!editing ? (
+            <div style={{
+              width: '100%', height: '100%',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 13, fontFamily: 'system-ui, sans-serif', color: '#374151',
+              wordBreak: 'break-word', whiteSpace: 'pre-wrap', textAlign: 'center',
+              userSelect: 'none', overflow: 'hidden',
+            }}>
+              {node.label || (isSelected ? '' : <span style={{ color: '#9ca3af' }}>...</span>)}
+            </div>
+          ) : (
+            <textarea
+              ref={textareaRef}
               autoFocus
               value={labelDraft}
-              onChange={e => setLabelDraft(e.target.value)}
+              onChange={e => { setLabelDraft(e.target.value); autoResize(); }}
+              onFocus={autoResize}
               onKeyDown={e => {
-                if (e.key === 'Enter') { e.preventDefault(); confirmEdit(); }
-                if (e.key === 'Escape') { setEditing(false); setCursorMode('idle'); }
+                if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); }
               }}
               onBlur={confirmEdit}
               style={{
-                width: '100%',
-                height: '100%',
-                border: 'none',
-                background: 'transparent',
-                outline: 'none',
-                textAlign: 'center',
-                fontSize: 13,
-                fontFamily: 'system-ui, sans-serif',
-                color: '#374151',
+                width: '100%', display: 'block',
+                border: 'none', background: 'transparent', outline: 'none',
+                textAlign: 'center', fontSize: 13, fontFamily: 'system-ui, sans-serif',
+                color: '#374151', resize: 'none', overflow: 'hidden',
+                lineHeight: 1.5, padding: 0,
               }}
             />
-          </foreignObject>
-        )}
+          )}
+        </foreignObject>
 
         {/* Connection handles: on hover (desktop) or when selected (mobile, no hover state) */}
         {(isMobile ? isSelected : hovered) && !editing && (
