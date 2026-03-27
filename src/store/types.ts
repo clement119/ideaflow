@@ -23,6 +23,8 @@ export interface INode {
   height: number;
   colour: string;
   emoji?: string;
+  note?: string;
+  noteVisible?: boolean;
 }
 
 export interface IEdge {
@@ -31,6 +33,8 @@ export interface IEdge {
   targetId: string;
   label?: string;
   style: EdgeStyle;
+  note?: string;
+  noteVisible?: boolean;
 }
 
 export interface ICluster {

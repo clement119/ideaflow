@@ -7,6 +7,7 @@ import { NodeIdea } from './NodeIdea';
 import { NodeNote } from './NodeNote';
 import { ResizeHandle } from './ResizeHandle';
 import { ConnectionHandle } from './ConnectionHandle';
+import { NoteCallout } from './NoteCallout';
 import { EditNodeCommand, MoveNodeCommand } from '../../store/commands';
 import { useIsMobile } from '../../hooks/useMobile';
 
@@ -23,7 +24,6 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
   const dragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
   const didDrag = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  // Snapshot of label+height taken when editing begins, for undo and cancel
   const editStartRef = useRef<{ label: string; height: number } | null>(null);
 
   const selection = useStore(s => s.selection);
@@ -50,7 +50,6 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
     e.stopPropagation();
     if (editing) return;
     didDrag.current = false;
-
     dragRef.current = { startX: e.clientX, startY: e.clientY, originX: node.x, originY: node.y };
     (e.currentTarget as SVGElement).setPointerCapture(e.pointerId);
     setCursorMode('drag-node');
@@ -64,7 +63,6 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
 
     if (didDrag.current) {
       if (multiSelected) {
-        // Move all selected nodes
         const sel = useStore.getState().selection.nodeIds;
         const nodes = useStore.getState().nodes;
         const updated: Record<string, INode> = { ...nodes };
@@ -110,19 +108,33 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
     setCursorMode('text-edit');
   };
 
-  // Measure the textarea and grow node.height to fit content
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    useStore.setState(s => ({
+      nodes: {
+        ...s.nodes,
+        [node.id]: {
+          ...s.nodes[node.id],
+          note: s.nodes[node.id].note ?? '',
+          noteVisible: !(s.nodes[node.id].noteVisible ?? false),
+        },
+      },
+    }));
+  };
+
+  // Measure textarea and grow node.height to fit content
   const autoResize = useCallback(() => {
     const ta = textareaRef.current;
     if (!ta) return;
     ta.style.height = 'auto';
-    const newHeight = Math.max(40, ta.scrollHeight + 8);
+    const newHeight = Math.max(44, ta.scrollHeight + 20);
     ta.style.height = `${ta.scrollHeight}px`;
     useStore.setState(s => ({
       nodes: { ...s.nodes, [node.id]: { ...s.nodes[node.id], height: newHeight } },
     }));
   }, [node.id]);
 
-  // Size textarea as soon as it mounts (handles pre-existing text)
   useEffect(() => {
     if (editing) autoResize();
   }, [editing, autoResize]);
@@ -141,7 +153,6 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
   };
 
   const cancelEdit = () => {
-    // Restore original height if it changed during editing
     if (editStartRef.current) {
       useStore.setState(s => ({
         nodes: { ...s.nodes, [node.id]: { ...s.nodes[node.id], height: editStartRef.current!.height } },
@@ -153,12 +164,14 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
     setCursorMode('idle');
   };
 
-  const shape = node.type === 'idea' ? <NodeIdea node={node} selected={isSelected} />
-    : node.type === 'note' ? <NodeNote node={node} selected={isSelected} />
-    : <NodeDefault node={node} selected={isSelected} />;
+  const activeHover = hovered && !isSelected;
+  const shape = node.type === 'idea'
+    ? <NodeIdea node={node} selected={isSelected} hovered={activeHover} />
+    : node.type === 'note'
+    ? <NodeNote node={node} selected={isSelected} hovered={activeHover} />
+    : <NodeDefault node={node} selected={isSelected} hovered={activeHover} />;
 
   return (
-    // Outer plain <g> owns position — never touches Framer Motion so drags are instant
     <g
       key={node.id}
       transform={`translate(${node.x}, ${node.y})`}
@@ -167,10 +180,10 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
       onPointerUp={handlePointerUp}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
+      onContextMenu={handleContextMenu}
       onPointerEnter={() => { setHovered(true); if (!dragRef.current) setCursorMode('hover-node'); }}
       onPointerLeave={() => { setHovered(false); if (!dragRef.current) setCursorMode('idle'); }}
     >
-      {/* Inner motion.g handles only the spring entrance/exit animation */}
       <motion.g
         initial={{ scale: 0.6, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
@@ -180,13 +193,14 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
       >
         {shape}
 
-        {/* Emoji prefix */}
         {node.emoji && (
           <text x={8} y={node.height / 2 + 5} fontSize={14}>{node.emoji}</text>
         )}
 
-        {/* Label — foreignObject for both modes so text wraps naturally */}
-        <foreignObject x={4} y={4} width={node.width - 8} height={node.height - 8}
+        {/* Label — wider inset (12px H, 10px V) for breathing room */}
+        <foreignObject
+          x={12} y={10}
+          width={node.width - 24} height={node.height - 20}
           style={{ pointerEvents: editing ? 'auto' : 'none', overflow: 'visible' }}
         >
           {!editing ? (
@@ -221,7 +235,7 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
           )}
         </foreignObject>
 
-        {/* Connection handles: on hover (desktop) or when selected (mobile, no hover state) */}
+        {/* Connection handles */}
         {(isMobile ? isSelected : hovered) && !editing && (
           <>
             <ConnectionHandle node={node} svgRef={svgRef} side="right" />
@@ -231,10 +245,23 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
           </>
         )}
 
-        {/* Resize handle (only when selected) */}
-        {isSelected && !editing && (
-          <ResizeHandle node={node} />
-        )}
+        {/* Resize handle */}
+        {isSelected && !editing && <ResizeHandle node={node} />}
+
+        {/* Note callout */}
+        <AnimatePresence>
+          {node.noteVisible && (
+            <NoteCallout
+              key="callout"
+              note={node.note ?? ''}
+              cx={node.width / 2}
+              onSave={(newNote, oldNote) => execute(new EditNodeCommand(node.id, { note: oldNote }, { note: newNote }))}
+              onHide={() => useStore.setState(s => ({
+                nodes: { ...s.nodes, [node.id]: { ...s.nodes[node.id], noteVisible: false } },
+              }))}
+            />
+          )}
+        </AnimatePresence>
       </motion.g>
     </g>
   );

@@ -1,26 +1,40 @@
+import { motion } from 'framer-motion';
 import type { INode } from '../../store/types';
 
 interface Props {
   node: INode;
   selected: boolean;
+  hovered: boolean;
 }
 
-export function NodeIdea({ node, selected }: Props) {
-  const cx = node.width / 2;
-  const cy = node.height / 2;
-  const rx = node.width / 2;
-  const ry = node.height / 2;
-
+export function NodeIdea({ node, selected, hovered }: Props) {
   return (
-    <ellipse
-      cx={cx}
-      cy={cy}
-      rx={rx}
-      ry={ry}
+    <motion.ellipse
+      cx={node.width / 2}
+      cy={node.height / 2}
+      rx={node.width / 2}
+      ry={node.height / 2}
       fill={node.colour}
+      animate={
+        selected
+          ? { strokeWidth: 2, filter: 'drop-shadow(0 0 6px rgba(99,102,241,0.35))' }
+          : hovered
+          ? {
+              strokeWidth: [1.5, 2.5, 1.5],
+              filter: [
+                'drop-shadow(0 0 2px rgba(99,102,241,0.15))',
+                'drop-shadow(0 0 10px rgba(99,102,241,0.45))',
+                'drop-shadow(0 0 2px rgba(99,102,241,0.15))',
+              ],
+            }
+          : { strokeWidth: 1.5, filter: 'drop-shadow(0 0 0px rgba(99,102,241,0))' }
+      }
       stroke={selected ? '#6366f1' : '#a78bfa'}
-      strokeWidth={selected ? 2 : 1.5}
-      style={{ filter: selected ? 'drop-shadow(0 0 6px rgba(99,102,241,0.3))' : undefined }}
+      transition={
+        hovered && !selected
+          ? { repeat: Infinity, duration: 1.8, ease: 'easeInOut' }
+          : { duration: 0.25 }
+      }
     />
   );
 }
