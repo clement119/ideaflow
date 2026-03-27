@@ -254,11 +254,13 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
             <NoteCallout
               key="callout"
               note={node.note ?? ''}
-              cx={node.width / 2}
+              anchorX={node.width / 2}
+              anchorY={0}
               onSave={(newNote, oldNote) => execute(new EditNodeCommand(node.id, { note: oldNote }, { note: newNote }))}
               onHide={() => useStore.setState(s => ({
                 nodes: { ...s.nodes, [node.id]: { ...s.nodes[node.id], noteVisible: false } },
               }))}
+              onSelect={() => selectNode(node.id)}
             />
           )}
         </AnimatePresence>

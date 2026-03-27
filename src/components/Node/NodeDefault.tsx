@@ -14,8 +14,7 @@ export function NodeDefault({ node, selected, hovered }: Props) {
       y={0}
       width={node.width}
       height={node.height}
-      rx={node.height / 2}
-      ry={node.height / 2}
+      rx={12}
       fill={node.colour}
       animate={
         selected

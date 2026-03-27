@@ -9,11 +9,12 @@ interface Props {
 
 export function NodeIdea({ node, selected, hovered }: Props) {
   return (
-    <motion.ellipse
-      cx={node.width / 2}
-      cy={node.height / 2}
-      rx={node.width / 2}
-      ry={node.height / 2}
+    <motion.rect
+      x={0}
+      y={0}
+      width={node.width}
+      height={node.height}
+      rx={14}
       fill={node.colour}
       animate={
         selected

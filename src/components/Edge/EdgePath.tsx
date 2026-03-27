@@ -95,11 +95,12 @@ export function EdgePath({ edge, bezier }: Props) {
         style={{ pointerEvents: 'none' }}
       />
 
-      {/* Edge label (display) — double-click to edit */}
+      {/* Edge label (display) — click to select, double-click to edit */}
       {edge.label && !editingLabel && (
         <g
           transform={`translate(${bezier.midpoint.x}, ${bezier.midpoint.y})`}
           style={{ cursor: 'text' }}
+          onClick={e => { e.stopPropagation(); selectEdge(edge.id); }}
           onDoubleClick={openLabelEditor}
         >
           <rect x={-24} y={-10} width={48} height={20} rx={10} fill="white" stroke="#e5e7eb" strokeWidth={1} />
@@ -143,11 +144,13 @@ export function EdgePath({ edge, bezier }: Props) {
             <NoteCallout
               key="edge-callout"
               note={edge.note ?? ''}
-              cx={0}
+              anchorX={0}
+              anchorY={0}
               onSave={(newNote, oldNote) => execute(new EditEdgeCommand(edge.id, { note: oldNote }, { note: newNote }))}
               onHide={() => useStore.setState(s => ({
                 edges: { ...s.edges, [edge.id]: { ...s.edges[edge.id], noteVisible: false } },
               }))}
+              onSelect={() => selectEdge(edge.id)}
             />
           </g>
         )}
