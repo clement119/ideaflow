@@ -13,6 +13,22 @@ export type CursorMode =
   | 'pan-drag'
   | 'delete-ready';
 
+export interface IComment {
+  id: string;
+  text: string;
+  createdAt: number;
+}
+
+export interface ICard {
+  id: string;
+  title: string;
+  caption: string;
+  colour?: string;
+  note?: string;
+  noteVisible?: boolean;
+  comments?: IComment[];
+}
+
 export interface INode {
   id: string;
   type: NodeType;
@@ -25,6 +41,9 @@ export interface INode {
   emoji?: string;
   note?: string;
   noteVisible?: boolean;
+  cards?: ICard[];
+  cardsExpanded?: boolean;
+  comments?: IComment[];
 }
 
 export interface IEdge {

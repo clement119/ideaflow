@@ -1,4 +1,4 @@
-import type { INode, IEdge, ICluster } from './types';
+import type { INode, IEdge, ICluster, ICard, IComment } from './types';
 
 export interface ICommand {
   execute(state: StoreState): Partial<StoreState>;
@@ -349,5 +349,177 @@ export class AlignCommand implements ICommand {
       if (nodes[id] && this.before[id]) nodes[id] = { ...nodes[id], ...this.before[id] };
     });
     return { nodes };
+  }
+}
+
+// ─── Card Commands ───────────────────────────────────────────────────────────
+
+function patchNode(state: StoreState, nodeId: string, patch: Partial<INode>) {
+  const node = state.nodes[nodeId];
+  if (!node) return {};
+  return { nodes: { ...state.nodes, [nodeId]: { ...node, ...patch } } };
+}
+
+export class AddCardCommand implements ICommand {
+  description = 'Add card';
+  constructor(private nodeId: string, private card: ICard) {}
+
+  execute(state: StoreState) {
+    const node = state.nodes[this.nodeId];
+    if (!node) return {};
+    return patchNode(state, this.nodeId, {
+      cards: [...(node.cards ?? []), this.card],
+      cardsExpanded: true,
+    });
+  }
+  undo(state: StoreState) {
+    const node = state.nodes[this.nodeId];
+    if (!node) return {};
+    return patchNode(state, this.nodeId, {
+      cards: (node.cards ?? []).filter(c => c.id !== this.card.id),
+    });
+  }
+}
+
+export class EditCardCommand implements ICommand {
+  description = 'Edit card';
+  constructor(
+    private nodeId: string,
+    private cardId: string,
+    private from: Partial<ICard>,
+    private to: Partial<ICard>
+  ) {}
+
+  execute(state: StoreState) {
+    const node = state.nodes[this.nodeId];
+    if (!node) return {};
+    return patchNode(state, this.nodeId, {
+      cards: (node.cards ?? []).map(c => c.id === this.cardId ? { ...c, ...this.to } : c),
+    });
+  }
+  undo(state: StoreState) {
+    const node = state.nodes[this.nodeId];
+    if (!node) return {};
+    return patchNode(state, this.nodeId, {
+      cards: (node.cards ?? []).map(c => c.id === this.cardId ? { ...c, ...this.from } : c),
+    });
+  }
+}
+
+export class DeleteCardCommand implements ICommand {
+  description = 'Delete card';
+  constructor(private nodeId: string, private card: ICard) {}
+
+  execute(state: StoreState) {
+    const node = state.nodes[this.nodeId];
+    if (!node) return {};
+    return patchNode(state, this.nodeId, {
+      cards: (node.cards ?? []).filter(c => c.id !== this.card.id),
+    });
+  }
+  undo(state: StoreState) {
+    const node = state.nodes[this.nodeId];
+    if (!node) return {};
+    return patchNode(state, this.nodeId, {
+      cards: [...(node.cards ?? []), this.card],
+    });
+  }
+}
+
+export class ToggleCardsCommand implements ICommand {
+  description = 'Toggle cards';
+  constructor(private nodeId: string, private expanded: boolean) {}
+
+  execute(state: StoreState) {
+    return patchNode(state, this.nodeId, { cardsExpanded: this.expanded });
+  }
+  undo(state: StoreState) {
+    return patchNode(state, this.nodeId, { cardsExpanded: !this.expanded });
+  }
+}
+
+// ─── Comment Commands ────────────────────────────────────────────────────────
+
+export class AddCommentCommand implements ICommand {
+  description = 'Add comment';
+  constructor(
+    private nodeId: string,
+    private cardId: string | null,
+    private comment: IComment
+  ) {}
+
+  execute(state: StoreState) {
+    const node = state.nodes[this.nodeId];
+    if (!node) return {};
+    if (this.cardId) {
+      return patchNode(state, this.nodeId, {
+        cards: (node.cards ?? []).map(c =>
+          c.id === this.cardId
+            ? { ...c, comments: [...(c.comments ?? []), this.comment] }
+            : c
+        ),
+      });
+    }
+    return patchNode(state, this.nodeId, {
+      comments: [...(node.comments ?? []), this.comment],
+    });
+  }
+  undo(state: StoreState) {
+    const node = state.nodes[this.nodeId];
+    if (!node) return {};
+    if (this.cardId) {
+      return patchNode(state, this.nodeId, {
+        cards: (node.cards ?? []).map(c =>
+          c.id === this.cardId
+            ? { ...c, comments: (c.comments ?? []).filter(cm => cm.id !== this.comment.id) }
+            : c
+        ),
+      });
+    }
+    return patchNode(state, this.nodeId, {
+      comments: (node.comments ?? []).filter(cm => cm.id !== this.comment.id),
+    });
+  }
+}
+
+export class DeleteCommentCommand implements ICommand {
+  description = 'Delete comment';
+  constructor(
+    private nodeId: string,
+    private cardId: string | null,
+    private comment: IComment
+  ) {}
+
+  execute(state: StoreState) {
+    const node = state.nodes[this.nodeId];
+    if (!node) return {};
+    if (this.cardId) {
+      return patchNode(state, this.nodeId, {
+        cards: (node.cards ?? []).map(c =>
+          c.id === this.cardId
+            ? { ...c, comments: (c.comments ?? []).filter(cm => cm.id !== this.comment.id) }
+            : c
+        ),
+      });
+    }
+    return patchNode(state, this.nodeId, {
+      comments: (node.comments ?? []).filter(cm => cm.id !== this.comment.id),
+    });
+  }
+  undo(state: StoreState) {
+    const node = state.nodes[this.nodeId];
+    if (!node) return {};
+    if (this.cardId) {
+      return patchNode(state, this.nodeId, {
+        cards: (node.cards ?? []).map(c =>
+          c.id === this.cardId
+            ? { ...c, comments: [...(c.comments ?? []), this.comment] }
+            : c
+        ),
+      });
+    }
+    return patchNode(state, this.nodeId, {
+      comments: [...(node.comments ?? []), this.comment],
+    });
   }
 }

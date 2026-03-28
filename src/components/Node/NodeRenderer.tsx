@@ -1,15 +1,25 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useStore } from '../../store/store';
-import type { INode } from '../../store/types';
+import type { INode, ICard, IComment } from '../../store/types';
 import { NodeDefault } from './NodeDefault';
 import { NodeIdea } from './NodeIdea';
 import { NodeNote } from './NodeNote';
 import { ResizeHandle } from './ResizeHandle';
 import { ConnectionHandle } from './ConnectionHandle';
 import { NoteCallout } from './NoteCallout';
-import { EditNodeCommand, MoveNodeCommand } from '../../store/commands';
+import { ExpandArrow } from './ExpandArrow';
+import { StackedLayersPreview } from './StackedLayersPreview';
+import { CardStack } from './CardStack';
+import { CommentThread } from './CommentThread';
+import { ContextMenu } from './ContextMenu';
+import {
+  EditNodeCommand, MoveNodeCommand, DeleteNodeCommand,
+  AddCardCommand, EditCardCommand, DeleteCardCommand,
+  ToggleCardsCommand, AddCommentCommand, DeleteCommentCommand,
+} from '../../store/commands';
 import { useIsMobile } from '../../hooks/useMobile';
+import { newId } from '../../utils/ids';
 
 interface Props {
   svgRef: React.RefObject<SVGSVGElement | null>;
@@ -19,12 +29,15 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
   const [hovered, setHovered] = useState(false);
   const [editing, setEditing] = useState(false);
   const [labelDraft, setLabelDraft] = useState(node.label);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const isMobile = useIsMobile();
 
   const dragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
   const didDrag = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const editStartRef = useRef<{ label: string; height: number } | null>(null);
+  const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressPos = useRef({ x: 0, y: 0 });
 
   const selection = useStore(s => s.selection);
   const execute = useStore(s => s.execute);
@@ -36,6 +49,11 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
   const isSelected = selection.nodeIds.includes(node.id);
   const multiSelected = selection.nodeIds.length > 1 && isSelected;
 
+  const cards = node.cards ?? [];
+  const comments = node.comments ?? [];
+  const cardsExpanded = node.cardsExpanded ?? false;
+  const hasCards = cards.length > 0;
+
   // Auto-open edit for freshly created empty nodes
   const wasEmpty = useRef(node.label === '');
   if (wasEmpty.current && isSelected && !editing && node.label === '') {
@@ -46,6 +64,8 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
     }, 50);
   }
 
+  const cancelLong = () => { if (longPressRef.current) clearTimeout(longPressRef.current); };
+
   const handlePointerDown = (e: React.PointerEvent) => {
     e.stopPropagation();
     if (editing) return;
@@ -53,13 +73,18 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
     dragRef.current = { startX: e.clientX, startY: e.clientY, originX: node.x, originY: node.y };
     (e.currentTarget as SVGElement).setPointerCapture(e.pointerId);
     setCursorMode('drag-node');
+    // Long-press for context menu
+    longPressPos.current = { x: e.clientX, y: e.clientY };
+    longPressRef.current = setTimeout(() => {
+      if (!didDrag.current) setMenu(longPressPos.current);
+    }, 500);
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!dragRef.current) return;
     const dx = (e.clientX - dragRef.current.startX) / transform.zoom;
     const dy = (e.clientY - dragRef.current.startY) / transform.zoom;
-    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) didDrag.current = true;
+    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) { didDrag.current = true; cancelLong(); }
 
     if (didDrag.current) {
       if (multiSelected) {
@@ -81,6 +106,7 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
   };
 
   const handlePointerUp = () => {
+    cancelLong();
     if (!dragRef.current) return;
     if (didDrag.current) {
       const current = useStore.getState().nodes[node.id];
@@ -111,16 +137,7 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    useStore.setState(s => ({
-      nodes: {
-        ...s.nodes,
-        [node.id]: {
-          ...s.nodes[node.id],
-          note: s.nodes[node.id].note ?? '',
-          noteVisible: !(s.nodes[node.id].noteVisible ?? false),
-        },
-      },
-    }));
+    setMenu({ x: e.clientX, y: e.clientY });
   };
 
   // Measure textarea and grow node.height to fit content
@@ -164,12 +181,26 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
     setCursorMode('idle');
   };
 
+  // ── Card & comment handlers ────────────────────────────────────────────────
+  const addCard = () => {
+    const card: ICard = { id: newId(), title: '', caption: '', colour: node.colour };
+    execute(new AddCardCommand(node.id, card));
+  };
+
+  const addComment = () => {
+    // Expand card area to show comment thread on the node itself
+    // We don't auto-expand here; CommentThread is always visible below cards
+  };
+
   const activeHover = hovered && !isSelected;
   const shape = node.type === 'idea'
     ? <NodeIdea node={node} selected={isSelected} hovered={activeHover} />
     : node.type === 'note'
     ? <NodeNote node={node} selected={isSelected} hovered={activeHover} />
     : <NodeDefault node={node} selected={isSelected} hovered={activeHover} />;
+
+  // Height below bubble for expand arrow placement
+  const arrowCY = node.height + (hasCards && !cardsExpanded ? 16 : 10);
 
   return (
     <g
@@ -178,11 +209,12 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
+      onPointerCancel={cancelLong}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
       onContextMenu={handleContextMenu}
       onPointerEnter={() => { setHovered(true); if (!dragRef.current) setCursorMode('hover-node'); }}
-      onPointerLeave={() => { setHovered(false); if (!dragRef.current) setCursorMode('idle'); }}
+      onPointerLeave={() => { setHovered(false); if (!dragRef.current) setCursorMode('idle'); cancelLong(); }}
     >
       <motion.g
         initial={{ scale: 0.6, opacity: 0 }}
@@ -197,7 +229,7 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
           <text x={8} y={node.height / 2 + 5} fontSize={14}>{node.emoji}</text>
         )}
 
-        {/* Label — wider inset (12px H, 10px V) for breathing room */}
+        {/* Label */}
         <foreignObject
           x={12} y={10}
           width={node.width - 24} height={node.height - 20}
@@ -248,6 +280,83 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
         {/* Resize handle */}
         {isSelected && !editing && <ResizeHandle node={node} />}
 
+        {/* Stacked layers preview (collapsed + has cards) */}
+        {hasCards && !cardsExpanded && (
+          <StackedLayersPreview
+            nodeWidth={node.width}
+            nodeHeight={node.height}
+            count={cards.length}
+            nodeColour={node.colour}
+          />
+        )}
+
+        {/* Expand/collapse arrow — only when there are cards */}
+        {hasCards && (
+          <ExpandArrow
+            expanded={cardsExpanded}
+            cx={node.width / 2}
+            cy={arrowCY}
+            onClick={() => execute(new ToggleCardsCommand(node.id, !cardsExpanded))}
+          />
+        )}
+
+        {/* Card stack */}
+        {cardsExpanded && (
+          <CardStack
+            cards={cards}
+            nodeId={node.id}
+            nodeWidth={node.width}
+            nodeHeight={node.height}
+            nodeColour={node.colour}
+            onEditCard={(cardId, from, to) => execute(new EditCardCommand(node.id, cardId, from, to))}
+            onDeleteCard={(_cardId, card) => execute(new DeleteCardCommand(node.id, card))}
+            onAddComment={(cardId, c) => execute(new AddCommentCommand(node.id, cardId, c))}
+            onDeleteComment={(cardId, commentId) => {
+              const card = useStore.getState().nodes[node.id]?.cards?.find(c => c.id === cardId);
+              const cm = card?.comments?.find(c => c.id === commentId);
+              if (cm) execute(new DeleteCommentCommand(node.id, cardId, cm));
+            }}
+            onEditComment={(cardId, commentId, text) => {
+              const card = useStore.getState().nodes[node.id]?.cards?.find(c => c.id === cardId);
+              const cm = card?.comments?.find(c => c.id === commentId);
+              if (cm) execute(new EditCardCommand(node.id, cardId,
+                { comments: card!.comments },
+                { comments: card!.comments!.map(c => c.id === commentId ? { ...c, text } : c) }
+              ));
+            }}
+            onEditNote={(cardId, newNote, oldNote) => execute(new EditCardCommand(node.id, cardId, { note: oldNote }, { note: newNote }))}
+          />
+        )}
+
+        {/* Node-level comment thread */}
+        {comments.length > 0 && (
+          <foreignObject
+            x={0}
+            y={node.height + (hasCards ? (cardsExpanded ? 500 : 30) : 22)}
+            width={node.width}
+            height={comments.length * 52 + 60}
+            style={{ overflow: 'visible' }}
+          >
+            <CommentThread
+              comments={comments}
+              width={node.width}
+              onAdd={c => execute(new AddCommentCommand(node.id, null, c))}
+              onDelete={id => {
+                const cm = useStore.getState().nodes[node.id]?.comments?.find(c => c.id === id);
+                if (cm) execute(new DeleteCommentCommand(node.id, null, cm));
+              }}
+              onEdit={(id, text) => {
+                const current = useStore.getState().nodes[node.id];
+                if (!current) return;
+                execute(new EditNodeCommand(node.id,
+                  { comments: current.comments },
+                  { comments: (current.comments ?? []).map(c => c.id === id ? { ...c, text } : c) }
+                ));
+              }}
+            />
+          </foreignObject>
+        )}
+
         {/* Note callout */}
         <AnimatePresence>
           {node.noteVisible && (
@@ -289,6 +398,57 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
           </g>
         )}
       </motion.g>
+
+      {/* Context menu (right-click / long-press) */}
+      {menu && (
+        <ContextMenu
+          x={menu.x} y={menu.y}
+          onClose={() => setMenu(null)}
+          groups={[
+            {
+              items: [
+                {
+                  icon: '🃏', label: 'Add Card',
+                  onClick: addCard,
+                },
+                {
+                  icon: '💬', label: 'Add Comment',
+                  onClick: () => {
+                    addComment();
+                    const c: IComment = { id: newId(), text: '', createdAt: Date.now() };
+                    execute(new AddCommentCommand(node.id, null, c));
+                  },
+                },
+                {
+                  icon: '📌', label: node.noteVisible ? 'Hide Note' : (node.note !== undefined ? 'Show Note' : 'Add Note'),
+                  onClick: () => useStore.setState(s => ({
+                    nodes: {
+                      ...s.nodes,
+                      [node.id]: {
+                        ...s.nodes[node.id],
+                        note: s.nodes[node.id].note ?? '',
+                        noteVisible: !(s.nodes[node.id].noteVisible ?? false),
+                      },
+                    },
+                  })),
+                },
+              ],
+            },
+            {
+              items: [
+                {
+                  icon: '✕', label: 'Delete',
+                  danger: true,
+                  onClick: () => {
+                    execute(new DeleteNodeCommand(node.id, node));
+                    useStore.getState().clearSelection();
+                  },
+                },
+              ],
+            },
+          ]}
+        />
+      )}
     </g>
   );
 }
