@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import type { INode } from '../../store/types';
+import { useIsMobile } from '../../hooks/useMobile';
 
 interface Props {
   node: INode;
@@ -8,6 +9,8 @@ interface Props {
 }
 
 export function NodeIdea({ node, selected, hovered }: Props) {
+  const isMobile = useIsMobile();
+  const breathe = hovered && !selected && !isMobile;
   return (
     <motion.rect
       x={0}
@@ -19,7 +22,7 @@ export function NodeIdea({ node, selected, hovered }: Props) {
       animate={
         selected
           ? { strokeWidth: 2, filter: 'drop-shadow(0 0 6px rgba(99,102,241,0.35))' }
-          : hovered
+          : breathe
           ? {
               strokeWidth: [1.5, 2.5, 1.5],
               filter: [
@@ -32,7 +35,7 @@ export function NodeIdea({ node, selected, hovered }: Props) {
       }
       stroke={selected ? '#6366f1' : '#a78bfa'}
       transition={
-        hovered && !selected
+        breathe
           ? { repeat: Infinity, duration: 1.8, ease: 'easeInOut' }
           : { duration: 0.25 }
       }

@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useCallback } from 'react';
+import { memo, useRef, useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useStore } from '../../store/store';
 import type { INode, ICard, IComment } from '../../store/types';
@@ -7,7 +7,6 @@ import { NodeIdea } from './NodeIdea';
 import { NodeNote } from './NodeNote';
 import { ResizeHandle } from './ResizeHandle';
 import { ConnectionHandle } from './ConnectionHandle';
-import { NoteCallout } from './NoteCallout';
 import { ExpandArrow } from './ExpandArrow';
 import { StackedLayersPreview } from './StackedLayersPreview';
 import { CardStack } from './CardStack';
@@ -25,11 +24,12 @@ interface Props {
   svgRef: React.RefObject<SVGSVGElement | null>;
 }
 
-function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSVGElement | null> }) {
+const NodeItem = memo(function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSVGElement | null> }) {
   const [hovered, setHovered] = useState(false);
   const [editing, setEditing] = useState(false);
   const [labelDraft, setLabelDraft] = useState(node.label);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const [nodeCommentsOpen, setNodeCommentsOpen] = useState(false);
   const isMobile = useIsMobile();
 
   const dragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
@@ -44,7 +44,6 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
   const selectNode = useStore(s => s.selectNode);
   const toggleSelectNode = useStore(s => s.toggleSelectNode);
   const setCursorMode = useStore(s => s.setCursorMode);
-  const transform = useStore(s => s.canvasTransform);
 
   const isSelected = selection.nodeIds.includes(node.id);
   const multiSelected = selection.nodeIds.length > 1 && isSelected;
@@ -82,8 +81,9 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
 
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!dragRef.current) return;
-    const dx = (e.clientX - dragRef.current.startX) / transform.zoom;
-    const dy = (e.clientY - dragRef.current.startY) / transform.zoom;
+    const zoom = useStore.getState().canvasTransform.zoom;
+    const dx = (e.clientX - dragRef.current.startX) / zoom;
+    const dy = (e.clientY - dragRef.current.startY) / zoom;
     if (Math.abs(dx) > 2 || Math.abs(dy) > 2) { didDrag.current = true; cancelLong(); }
 
     if (didDrag.current) {
@@ -93,7 +93,7 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
         const updated: Record<string, INode> = { ...nodes };
         sel.forEach(id => {
           if (nodes[id]) {
-            updated[id] = { ...nodes[id], x: nodes[id].x + (e.movementX / transform.zoom), y: nodes[id].y + (e.movementY / transform.zoom) };
+            updated[id] = { ...nodes[id], x: nodes[id].x + (e.movementX / zoom), y: nodes[id].y + (e.movementY / zoom) };
           }
         });
         useStore.setState({ nodes: updated });
@@ -187,12 +187,7 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
     execute(new AddCardCommand(node.id, card));
   };
 
-  const addComment = () => {
-    // Expand card area to show comment thread on the node itself
-    // We don't auto-expand here; CommentThread is always visible below cards
-  };
-
-  const activeHover = hovered && !isSelected;
+  const activeHover = hovered && !isSelected && !isMobile;
   const shape = node.type === 'idea'
     ? <NodeIdea node={node} selected={isSelected} hovered={activeHover} />
     : node.type === 'note'
@@ -304,7 +299,6 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
         {cardsExpanded && (
           <CardStack
             cards={cards}
-            nodeId={node.id}
             nodeWidth={node.width}
             nodeHeight={node.height}
             nodeColour={node.colour}
@@ -324,79 +318,68 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
                 { comments: card!.comments!.map(c => c.id === commentId ? { ...c, text } : c) }
               ));
             }}
-            onEditNote={(cardId, newNote, oldNote) => execute(new EditCardCommand(node.id, cardId, { note: oldNote }, { note: newNote }))}
           />
         )}
 
-        {/* Node-level comment thread */}
-        {comments.length > 0 && (
-          <foreignObject
-            x={0}
-            y={node.height + (hasCards ? (cardsExpanded ? 500 : 30) : 22)}
-            width={node.width}
-            height={comments.length * 52 + 60}
-            style={{ overflow: 'visible' }}
-          >
-            <CommentThread
-              comments={comments}
-              width={node.width}
-              onAdd={c => execute(new AddCommentCommand(node.id, null, c))}
-              onDelete={id => {
-                const cm = useStore.getState().nodes[node.id]?.comments?.find(c => c.id === id);
-                if (cm) execute(new DeleteCommentCommand(node.id, null, cm));
-              }}
-              onEdit={(id, text) => {
-                const current = useStore.getState().nodes[node.id];
-                if (!current) return;
-                execute(new EditNodeCommand(node.id,
-                  { comments: current.comments },
-                  { comments: (current.comments ?? []).map(c => c.id === id ? { ...c, text } : c) }
-                ));
-              }}
-            />
-          </foreignObject>
-        )}
+        {/* Node-level comment expand arrow — right side of bubble */}
+        <ExpandArrow
+          expanded={nodeCommentsOpen}
+          cx={node.width + 14}
+          cy={node.height / 2}
+          onClick={() => setNodeCommentsOpen(v => !v)}
+          tooltipCollapsed={`${comments.length} comment${comments.length !== 1 ? 's' : ''} — click to open`}
+          tooltipExpanded="Click to close comments"
+        />
 
-        {/* Note callout */}
-        <AnimatePresence>
-          {node.noteVisible && (
-            <NoteCallout
-              key="callout"
-              note={node.note ?? ''}
-              anchorX={node.width / 2}
-              anchorY={0}
-              onSave={(newNote, oldNote) => execute(new EditNodeCommand(node.id, { note: oldNote }, { note: newNote }))}
-              onHide={() => useStore.setState(s => ({
-                nodes: { ...s.nodes, [node.id]: { ...s.nodes[node.id], noteVisible: false } },
-              }))}
-              onSelect={() => selectNode(node.id)}
-            />
-          )}
-        </AnimatePresence>
-
-        {/* Pulsing indicator — shown when note exists but is hidden */}
-        {node.note !== undefined && !node.noteVisible && (
-          <g
-            style={{ cursor: 'pointer' }}
-            onClick={e => {
-              e.stopPropagation();
-              useStore.setState(s => ({
-                nodes: { ...s.nodes, [node.id]: { ...s.nodes[node.id], noteVisible: true } },
-              }));
-            }}
-          >
-            <motion.circle
-              cx={node.width / 2} cy={-10} r={5}
-              fill={node.colour}
-              stroke="#fde68a"
-              strokeWidth={1}
-              animate={{ r: [5, 13, 5], opacity: [0.55, 0, 0.55] }}
-              transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}
-              style={{ pointerEvents: 'none' }}
-            />
-            <circle cx={node.width / 2} cy={-10} r={4} fill={node.colour} stroke="#fde68a" strokeWidth={1.5} />
+        {/* Comment count badge */}
+        {comments.length > 0 && !nodeCommentsOpen && (
+          <g style={{ pointerEvents: 'none' }}>
+            <circle cx={node.width + 22} cy={node.height / 2 - 10} r={7} fill="#6366f1" />
+            <text x={node.width + 22} y={node.height / 2 - 10} textAnchor="middle" dominantBaseline="middle"
+              fontSize={8} fontWeight="700" fill="white" fontFamily="system-ui" style={{ userSelect: 'none' }}>
+              {comments.length > 9 ? '9+' : comments.length}
+            </text>
           </g>
         )}
+
+        {/* Node-level comment thread — floats to the RIGHT */}
+        <AnimatePresence>
+          {nodeCommentsOpen && (
+            <motion.g
+              key="node-thread"
+              initial={{ opacity: 0, x: -8 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -8 }}
+              transition={{ duration: 0.18 }}
+            >
+              <foreignObject
+                x={node.width + 26}
+                y={0}
+                width={220}
+                height={Math.max(120, comments.length * 52 + 60)}
+                style={{ overflow: 'visible' }}
+              >
+                <CommentThread
+                  comments={comments}
+                  width={220}
+                  onAdd={c => execute(new AddCommentCommand(node.id, null, c))}
+                  onDelete={id => {
+                    const cm = useStore.getState().nodes[node.id]?.comments?.find(c => c.id === id);
+                    if (cm) execute(new DeleteCommentCommand(node.id, null, cm));
+                  }}
+                  onEdit={(id, text) => {
+                    const current = useStore.getState().nodes[node.id];
+                    if (!current) return;
+                    execute(new EditNodeCommand(node.id,
+                      { comments: current.comments },
+                      { comments: (current.comments ?? []).map(c => c.id === id ? { ...c, text } : c) }
+                    ));
+                  }}
+                />
+              </foreignObject>
+            </motion.g>
+          )}
+        </AnimatePresence>
       </motion.g>
 
       {/* Context menu (right-click / long-press) */}
@@ -414,23 +397,10 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
                 {
                   icon: '💬', label: 'Add Comment',
                   onClick: () => {
-                    addComment();
+                    setNodeCommentsOpen(true);
                     const c: IComment = { id: newId(), text: '', createdAt: Date.now() };
                     execute(new AddCommentCommand(node.id, null, c));
                   },
-                },
-                {
-                  icon: '📌', label: node.noteVisible ? 'Hide Note' : (node.note !== undefined ? 'Show Note' : 'Add Note'),
-                  onClick: () => useStore.setState(s => ({
-                    nodes: {
-                      ...s.nodes,
-                      [node.id]: {
-                        ...s.nodes[node.id],
-                        note: s.nodes[node.id].note ?? '',
-                        noteVisible: !(s.nodes[node.id].noteVisible ?? false),
-                      },
-                    },
-                  })),
                 },
               ],
             },
@@ -451,7 +421,7 @@ function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSV
       )}
     </g>
   );
-}
+});
 
 export function NodeRenderer({ svgRef }: Props) {
   const nodes = useStore(s => s.nodes);

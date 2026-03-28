@@ -4,7 +4,6 @@ import { CardItem } from './CardItem';
 
 interface Props {
   cards: ICard[];
-  nodeId: string;
   nodeWidth: number;
   nodeHeight: number;
   nodeColour: string;
@@ -13,15 +12,14 @@ interface Props {
   onAddComment: (cardId: string, c: IComment) => void;
   onDeleteComment: (cardId: string, commentId: string) => void;
   onEditComment: (cardId: string, commentId: string, text: string) => void;
-  onEditNote: (cardId: string, newNote: string, oldNote: string) => void;
 }
 
-const CARD_GAP = 10;
-const STACK_TOP_OFFSET = 16;  // gap between bubble bottom and first card
+const CARD_GAP = 20;
+const STACK_TOP_OFFSET = 32;  // gap between bubble bottom and first card
 
 export function CardStack({
-  cards, nodeId, nodeWidth, nodeHeight, nodeColour,
-  onEditCard, onDeleteCard, onAddComment, onDeleteComment, onEditComment, onEditNote,
+  cards, nodeWidth, nodeHeight, nodeColour,
+  onEditCard, onDeleteCard, onAddComment, onDeleteComment, onEditComment,
 }: Props) {
   return (
     <AnimatePresence>
@@ -35,7 +33,6 @@ export function CardStack({
           <g key={card.id} transform={`translate(0, ${yOffset})`}>
             <CardItem
               card={card}
-              nodeId={nodeId}
               nodeWidth={nodeWidth}
               colour={nodeColour}
               onEditCard={(from, to) => onEditCard(card.id, from, to)}
@@ -43,7 +40,6 @@ export function CardStack({
               onAddComment={c => onAddComment(card.id, c)}
               onDeleteComment={id => onDeleteComment(card.id, id)}
               onEditComment={(id, text) => onEditComment(card.id, id, text)}
-              onEditNote={(newNote, oldNote) => onEditNote(card.id, newNote, oldNote)}
             />
             {/* stagger delay via the motion.g inside CardItem — index carries the delay */}
             <rect x={0} y={0} width={1} height={APPROX_CARD_H} fill="transparent" style={{ pointerEvents: 'none' }} />
