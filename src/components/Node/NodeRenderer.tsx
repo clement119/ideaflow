@@ -28,6 +28,7 @@ const NodeItem = memo(function NodeItem({ node, svgRef }: { node: INode; svgRef:
   const [hovered, setHovered] = useState(false);
   const [editing, setEditing] = useState(false);
   const [labelDraft, setLabelDraft] = useState(node.label);
+  const [editingHeight, setEditingHeight] = useState<number | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [nodeCommentsOpen, setNodeCommentsOpen] = useState(false);
   const isMobile = useIsMobile();
@@ -39,14 +40,13 @@ const NodeItem = memo(function NodeItem({ node, svgRef }: { node: INode; svgRef:
   const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressPos = useRef({ x: 0, y: 0 });
 
-  const selection = useStore(s => s.selection);
+  // Targeted selectors — each NodeItem only re-renders when ITS OWN state changes
+  const isSelected = useStore(s => s.selection.nodeIds.includes(node.id));
+  const multiSelected = useStore(s => s.selection.nodeIds.length > 1 && s.selection.nodeIds.includes(node.id));
   const execute = useStore(s => s.execute);
   const selectNode = useStore(s => s.selectNode);
   const toggleSelectNode = useStore(s => s.toggleSelectNode);
   const setCursorMode = useStore(s => s.setCursorMode);
-
-  const isSelected = selection.nodeIds.includes(node.id);
-  const multiSelected = selection.nodeIds.length > 1 && isSelected;
 
   const cards = node.cards ?? [];
   const comments = node.comments ?? [];
@@ -140,17 +140,15 @@ const NodeItem = memo(function NodeItem({ node, svgRef }: { node: INode; svgRef:
     setMenu({ x: e.clientX, y: e.clientY });
   };
 
-  // Measure textarea and grow node.height to fit content
+  // Resize textarea DOM directly (no store write) — keeps height purely local during editing
   const autoResize = useCallback(() => {
     const ta = textareaRef.current;
     if (!ta) return;
     ta.style.height = 'auto';
     const newHeight = Math.max(44, ta.scrollHeight + 20);
     ta.style.height = `${ta.scrollHeight}px`;
-    useStore.setState(s => ({
-      nodes: { ...s.nodes, [node.id]: { ...s.nodes[node.id], height: newHeight } },
-    }));
-  }, [node.id]);
+    setEditingHeight(newHeight);  // local state only — zero store broadcasts
+  }, []);
 
   useEffect(() => {
     if (editing) autoResize();
@@ -158,26 +156,24 @@ const NodeItem = memo(function NodeItem({ node, svgRef }: { node: INode; svgRef:
 
   const confirmEdit = () => {
     const snap = editStartRef.current;
-    const currentNode = useStore.getState().nodes[node.id];
+    const finalHeight = editingHeight ?? node.height;
     const from: Partial<typeof node> = { label: snap?.label ?? node.label, height: snap?.height ?? node.height };
-    const to: Partial<typeof node> = { label: labelDraft, height: currentNode?.height ?? node.height };
+    const to: Partial<typeof node> = { label: labelDraft, height: finalHeight };
     if (from.label !== to.label || from.height !== to.height) {
       execute(new EditNodeCommand(node.id, from, to));
     }
     editStartRef.current = null;
     setEditing(false);
+    setEditingHeight(null);
     setCursorMode('idle');
   };
 
   const cancelEdit = () => {
-    if (editStartRef.current) {
-      useStore.setState(s => ({
-        nodes: { ...s.nodes, [node.id]: { ...s.nodes[node.id], height: editStartRef.current!.height } },
-      }));
-    }
+    // No store write needed — we never wrote height to store during editing
     setLabelDraft(node.label);
     editStartRef.current = null;
     setEditing(false);
+    setEditingHeight(null);
     setCursorMode('idle');
   };
 
@@ -187,15 +183,18 @@ const NodeItem = memo(function NodeItem({ node, svgRef }: { node: INode; svgRef:
     execute(new AddCardCommand(node.id, card));
   };
 
+  // During editing use local height so the bubble grows without any store writes
+  const displayNode = (editing && editingHeight !== null) ? { ...node, height: editingHeight } : node;
+
   const activeHover = hovered && !isSelected && !isMobile;
-  const shape = node.type === 'idea'
-    ? <NodeIdea node={node} selected={isSelected} hovered={activeHover} />
-    : node.type === 'note'
-    ? <NodeNote node={node} selected={isSelected} hovered={activeHover} />
-    : <NodeDefault node={node} selected={isSelected} hovered={activeHover} />;
+  const shape = displayNode.type === 'idea'
+    ? <NodeIdea node={displayNode} selected={isSelected} hovered={activeHover} />
+    : displayNode.type === 'note'
+    ? <NodeNote node={displayNode} selected={isSelected} hovered={activeHover} />
+    : <NodeDefault node={displayNode} selected={isSelected} hovered={activeHover} />;
 
   // Height below bubble for expand arrow placement
-  const arrowCY = node.height + (hasCards && !cardsExpanded ? 16 : 10);
+  const arrowCY = displayNode.height + (hasCards && !cardsExpanded ? 16 : 10);
 
   return (
     <g
@@ -216,18 +215,18 @@ const NodeItem = memo(function NodeItem({ node, svgRef }: { node: INode; svgRef:
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.8, opacity: 0 }}
         transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-        style={{ transformOrigin: `${node.width / 2}px ${node.height / 2}px` }}
+        style={{ transformOrigin: `${displayNode.width / 2}px ${displayNode.height / 2}px` }}
       >
         {shape}
 
         {node.emoji && (
-          <text x={8} y={node.height / 2 + 5} fontSize={14}>{node.emoji}</text>
+          <text x={8} y={displayNode.height / 2 + 5} fontSize={14}>{node.emoji}</text>
         )}
 
         {/* Label */}
         <foreignObject
           x={12} y={10}
-          width={node.width - 24} height={node.height - 20}
+          width={displayNode.width - 24} height={displayNode.height - 20}
           style={{ pointerEvents: editing ? 'auto' : 'none', overflow: 'visible' }}
         >
           {!editing ? (
@@ -265,21 +264,21 @@ const NodeItem = memo(function NodeItem({ node, svgRef }: { node: INode; svgRef:
         {/* Connection handles */}
         {(isMobile ? isSelected : hovered) && !editing && (
           <>
-            <ConnectionHandle node={node} svgRef={svgRef} side="right" />
-            <ConnectionHandle node={node} svgRef={svgRef} side="left" />
-            <ConnectionHandle node={node} svgRef={svgRef} side="top" />
-            <ConnectionHandle node={node} svgRef={svgRef} side="bottom" />
+            <ConnectionHandle node={displayNode} svgRef={svgRef} side="right" />
+            <ConnectionHandle node={displayNode} svgRef={svgRef} side="left" />
+            <ConnectionHandle node={displayNode} svgRef={svgRef} side="top" />
+            <ConnectionHandle node={displayNode} svgRef={svgRef} side="bottom" />
           </>
         )}
 
         {/* Resize handle */}
-        {isSelected && !editing && <ResizeHandle node={node} />}
+        {isSelected && !editing && <ResizeHandle node={displayNode} />}
 
         {/* Stacked layers preview (collapsed + has cards) */}
         {hasCards && !cardsExpanded && (
           <StackedLayersPreview
-            nodeWidth={node.width}
-            nodeHeight={node.height}
+            nodeWidth={displayNode.width}
+            nodeHeight={displayNode.height}
             count={cards.length}
             nodeColour={node.colour}
           />
@@ -299,8 +298,8 @@ const NodeItem = memo(function NodeItem({ node, svgRef }: { node: INode; svgRef:
         {cardsExpanded && (
           <CardStack
             cards={cards}
-            nodeWidth={node.width}
-            nodeHeight={node.height}
+            nodeWidth={displayNode.width}
+            nodeHeight={displayNode.height}
             nodeColour={node.colour}
             onEditCard={(cardId, from, to) => execute(new EditCardCommand(node.id, cardId, from, to))}
             onDeleteCard={(_cardId, card) => execute(new DeleteCardCommand(node.id, card))}
@@ -324,8 +323,8 @@ const NodeItem = memo(function NodeItem({ node, svgRef }: { node: INode; svgRef:
         {/* Node-level comment expand arrow — right side of bubble */}
         <ExpandArrow
           expanded={nodeCommentsOpen}
-          cx={node.width + 14}
-          cy={node.height / 2}
+          cx={displayNode.width + 14}
+          cy={displayNode.height / 2}
           onClick={() => setNodeCommentsOpen(v => !v)}
           tooltipCollapsed={`${comments.length} comment${comments.length !== 1 ? 's' : ''} — click to open`}
           tooltipExpanded="Click to close comments"
@@ -334,8 +333,8 @@ const NodeItem = memo(function NodeItem({ node, svgRef }: { node: INode; svgRef:
         {/* Comment count badge */}
         {comments.length > 0 && !nodeCommentsOpen && (
           <g style={{ pointerEvents: 'none' }}>
-            <circle cx={node.width + 22} cy={node.height / 2 - 10} r={7} fill="#6366f1" />
-            <text x={node.width + 22} y={node.height / 2 - 10} textAnchor="middle" dominantBaseline="middle"
+            <circle cx={displayNode.width + 22} cy={displayNode.height / 2 - 10} r={7} fill="#6366f1" />
+            <text x={displayNode.width + 22} y={displayNode.height / 2 - 10} textAnchor="middle" dominantBaseline="middle"
               fontSize={8} fontWeight="700" fill="white" fontFamily="system-ui" style={{ userSelect: 'none' }}>
               {comments.length > 9 ? '9+' : comments.length}
             </text>
@@ -353,7 +352,7 @@ const NodeItem = memo(function NodeItem({ node, svgRef }: { node: INode; svgRef:
               transition={{ duration: 0.18 }}
             >
               <foreignObject
-                x={node.width + 26}
+                x={displayNode.width + 26}
                 y={0}
                 width={220}
                 height={Math.max(120, comments.length * 52 + 60)}

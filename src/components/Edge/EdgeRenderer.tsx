@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { useStore } from '../../store/store';
 import { routeEdge, resolveEndpointRect } from '../../utils/geometry';
 import { EdgePath } from './EdgePath';
@@ -7,7 +8,8 @@ interface Props {
   svgRef: React.RefObject<SVGSVGElement | null>;
 }
 
-export function EdgeRenderer({ svgRef: _ }: Props) {
+
+export const EdgeRenderer = memo(function EdgeRenderer({ svgRef: _ }: Props) {
   const edges = useStore(s => s.edges);
   const nodes = useStore(s => s.nodes);
   const clusters = useStore(s => s.clusters);
@@ -36,4 +38,4 @@ export function EdgeRenderer({ svgRef: _ }: Props) {
       <DraftEdge />
     </g>
   );
-}
+});
