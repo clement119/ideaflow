@@ -7,6 +7,11 @@ interface Props {
   nodeWidth: number;
   nodeHeight: number;
   nodeColour: string;
+  /** Canvas-space X of the parent node (for portal positioning) */
+  nodeCanvasX: number;
+  /** Canvas-space Y of the parent node (for portal positioning) */
+  nodeCanvasY: number;
+  svgRef: React.RefObject<SVGSVGElement | null>;
   onEditCard: (cardId: string, from: Partial<ICard>, to: Partial<ICard>) => void;
   onDeleteCard: (cardId: string, card: ICard) => void;
   onAddComment: (cardId: string, c: IComment) => void;
@@ -19,15 +24,14 @@ const STACK_TOP_OFFSET = 32;  // gap between bubble bottom and first card
 
 export function CardStack({
   cards, nodeWidth, nodeHeight, nodeColour,
+  nodeCanvasX, nodeCanvasY, svgRef,
   onEditCard, onDeleteCard, onAddComment, onDeleteComment, onEditComment,
 }: Props) {
   return (
     <AnimatePresence>
       {cards.map((card, i) => {
-        // Each card is stacked below the previous; approximate height for layout
-        const APPROX_CARD_H = 68 + (card.comments?.length ?? 0) * 52;
         const yOffset = nodeHeight + STACK_TOP_OFFSET
-          + cards.slice(0, i).reduce((acc, c) => acc + 68 + ((c.comments?.length ?? 0) * 0) + CARD_GAP, 0);
+          + cards.slice(0, i).reduce((acc) => acc + 68 + CARD_GAP, 0);
 
         return (
           <g key={card.id} transform={`translate(0, ${yOffset})`}>
@@ -35,14 +39,15 @@ export function CardStack({
               card={card}
               nodeWidth={nodeWidth}
               colour={nodeColour}
+              svgRef={svgRef}
+              cardCanvasX={nodeCanvasX}
+              cardCanvasY={nodeCanvasY + yOffset}
               onEditCard={(from, to) => onEditCard(card.id, from, to)}
               onDeleteCard={() => onDeleteCard(card.id, card)}
               onAddComment={c => onAddComment(card.id, c)}
               onDeleteComment={id => onDeleteComment(card.id, id)}
               onEditComment={(id, text) => onEditComment(card.id, id, text)}
             />
-            {/* stagger delay via the motion.g inside CardItem — index carries the delay */}
-            <rect x={0} y={0} width={1} height={APPROX_CARD_H} fill="transparent" style={{ pointerEvents: 'none' }} />
           </g>
         );
       })}

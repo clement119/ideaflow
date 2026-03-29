@@ -10,7 +10,7 @@ import { ConnectionHandle } from './ConnectionHandle';
 import { ExpandArrow } from './ExpandArrow';
 import { StackedLayersPreview } from './StackedLayersPreview';
 import { CardStack } from './CardStack';
-import { CommentThread } from './CommentThread';
+import { CommentPanelPortal } from './CommentPanelPortal';
 import { ContextMenu } from './ContextMenu';
 import {
   EditNodeCommand, MoveNodeCommand, DeleteNodeCommand,
@@ -310,6 +310,9 @@ const NodeItem = memo(function NodeItem({ node, svgRef }: { node: INode; svgRef:
             nodeWidth={displayNode.width}
             nodeHeight={displayNode.height}
             nodeColour={node.colour}
+            nodeCanvasX={node.x}
+            nodeCanvasY={node.y}
+            svgRef={svgRef}
             onEditCard={(cardId, from, to) => execute(new EditCardCommand(node.id, cardId, from, to))}
             onDeleteCard={(_cardId, card) => execute(new DeleteCardCommand(node.id, card))}
             onAddComment={(cardId, c) => execute(new AddCommentCommand(node.id, cardId, c))}
@@ -329,7 +332,7 @@ const NodeItem = memo(function NodeItem({ node, svgRef }: { node: INode; svgRef:
           />
         )}
 
-        {/* Node-level comment expand arrow — right side of bubble */}
+        {/* Node-level comment expand arrow — right side of bubble (SVG, safe) */}
         <ExpandArrow
           expanded={nodeCommentsOpen}
           cx={displayNode.width + 14}
@@ -349,39 +352,30 @@ const NodeItem = memo(function NodeItem({ node, svgRef }: { node: INode; svgRef:
             </text>
           </g>
         )}
-
-        {/* Node-level comment thread — floats to the RIGHT */}
-        {/* Wrap in plain <g> (no transform animation) to avoid Safari foreignObject+CSS-transform bug */}
-        {nodeCommentsOpen && (
-          <g>
-            <foreignObject
-              x={displayNode.width + 26}
-              y={0}
-              width={220}
-              height={Math.max(120, comments.length * 52 + 60)}
-              style={{ overflow: 'visible' }}
-            >
-              <CommentThread
-                comments={comments}
-                width={220}
-                onAdd={c => execute(new AddCommentCommand(node.id, null, c))}
-                onDelete={id => {
-                  const cm = useStore.getState().nodes[node.id]?.comments?.find(c => c.id === id);
-                  if (cm) execute(new DeleteCommentCommand(node.id, null, cm));
-                }}
-                onEdit={(id, text) => {
-                  const current = useStore.getState().nodes[node.id];
-                  if (!current) return;
-                  execute(new EditNodeCommand(node.id,
-                    { comments: current.comments },
-                    { comments: (current.comments ?? []).map(c => c.id === id ? { ...c, text } : c) }
-                  ));
-                }}
-              />
-            </foreignObject>
-          </g>
-        )}
       </motion.g>
+
+      {/* Node-level comment panel — portal outside SVG to avoid Safari foreignObject+transform bug */}
+      {nodeCommentsOpen && (
+        <CommentPanelPortal
+          svgRef={svgRef}
+          canvasX={node.x + displayNode.width + 26}
+          canvasY={node.y}
+          comments={comments}
+          onAdd={c => execute(new AddCommentCommand(node.id, null, c))}
+          onDelete={id => {
+            const cm = useStore.getState().nodes[node.id]?.comments?.find(c => c.id === id);
+            if (cm) execute(new DeleteCommentCommand(node.id, null, cm));
+          }}
+          onEdit={(id, text) => {
+            const current = useStore.getState().nodes[node.id];
+            if (!current) return;
+            execute(new EditNodeCommand(node.id,
+              { comments: current.comments },
+              { comments: (current.comments ?? []).map(c => c.id === id ? { ...c, text } : c) }
+            ));
+          }}
+        />
+      )}
 
       {/* Context menu (right-click / long-press) */}
       {menu && (

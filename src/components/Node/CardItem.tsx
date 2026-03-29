@@ -2,7 +2,7 @@ import { memo, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import type { ICard, IComment } from '../../store/types';
 import { ExpandArrow } from './ExpandArrow';
-import { CommentThread } from './CommentThread';
+import { CommentPanelPortal } from './CommentPanelPortal';
 import { ContextMenu } from './ContextMenu';
 import { useIsMobile } from '../../hooks/useMobile';
 
@@ -10,6 +10,10 @@ interface Props {
   card: ICard;
   nodeWidth: number;
   colour: string;
+  /** Canvas-space position of this card's top-left corner (for portal positioning) */
+  cardCanvasX: number;
+  cardCanvasY: number;
+  svgRef: React.RefObject<SVGSVGElement | null>;
   onEditCard: (from: Partial<ICard>, to: Partial<ICard>) => void;
   onDeleteCard: () => void;
   onAddComment: (c: IComment) => void;
@@ -18,11 +22,10 @@ interface Props {
 }
 
 export const CARD_H = 68;
-const THREAD_W = 220;
-const THREAD_OFFSET_X = 16;   // gap between card right edge and thread panel
 
 export const CardItem = memo(function CardItem({
   card, nodeWidth, colour,
+  cardCanvasX, cardCanvasY, svgRef,
   onEditCard, onDeleteCard,
   onAddComment, onDeleteComment, onEditComment,
 }: Props) {
@@ -48,9 +51,6 @@ export const CardItem = memo(function CardItem({
     longPressPos.current = { x: e.clientX, y: e.clientY };
     longPressRef.current = setTimeout(() => setMenu(longPressPos.current), 500);
   };
-
-  // Approximate height of comment thread panel
-  const threadH = Math.max(120, comments.length * 52 + 60);
 
   return (
     <motion.g
@@ -152,25 +152,17 @@ export const CardItem = memo(function CardItem({
         </g>
       )}
 
-      {/* Comment thread — floats to the RIGHT, no transform animation (Safari foreignObject bug) */}
+      {/* Comment panel — portal outside SVG (Safari foreignObject+transform fix) */}
       {commentsOpen && (
-        <g>
-          <foreignObject
-            x={nodeWidth + THREAD_OFFSET_X + 10}
-            y={0}
-            width={THREAD_W}
-            height={threadH}
-            style={{ overflow: 'visible' }}
-          >
-            <CommentThread
-              comments={comments}
-              width={THREAD_W}
-              onAdd={c => { onAddComment(c); }}
-              onDelete={onDeleteComment}
-              onEdit={onEditComment}
-            />
-          </foreignObject>
-        </g>
+        <CommentPanelPortal
+          svgRef={svgRef}
+          canvasX={cardCanvasX + nodeWidth + 26}
+          canvasY={cardCanvasY}
+          comments={comments}
+          onAdd={onAddComment}
+          onDelete={onDeleteComment}
+          onEdit={onEditComment}
+        />
       )}
 
       {/* Context menu */}
