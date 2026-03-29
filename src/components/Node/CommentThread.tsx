@@ -25,29 +25,31 @@ export function CommentThread({ comments, width, onAdd, onDelete, onEdit }: Prop
 
   return (
     <div
-      style={{ width, background: '#fafafa', borderRadius: 10, overflow: 'hidden', border: '1px solid #f0effe' }}
+      style={{ width, background: '#fafafa', borderRadius: 10, border: '1px solid #f0effe', overflow: 'visible' }}
       onPointerDown={e => e.stopPropagation()}
       onClick={e => e.stopPropagation()}
     >
-      {/* Comment list */}
-      <AnimatePresence initial={false}>
-        {comments.map(c => (
-          <motion.div
-            key={c.id}
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.18 }}
-            style={{ overflow: 'hidden' }}
-          >
-            <CommentItem
-              comment={c}
-              onDelete={() => onDelete(c.id)}
-              onEdit={text => onEdit(c.id, text)}
-            />
-          </motion.div>
-        ))}
-      </AnimatePresence>
+      {/* Comment list — scrollable when tall */}
+      <div style={{ maxHeight: 260, overflowY: 'auto', overflowX: 'hidden' }}>
+        <AnimatePresence initial={false}>
+          {comments.map(c => (
+            <motion.div
+              key={c.id}
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.18 }}
+              style={{ overflow: 'hidden' }}
+            >
+              <CommentItem
+                comment={c}
+                onDelete={() => onDelete(c.id)}
+                onEdit={text => onEdit(c.id, text)}
+              />
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
 
       {/* Input row */}
       <div style={{ display: 'flex', gap: 6, padding: '6px 8px', borderTop: comments.length ? '1px solid #f0effe' : 'none' }}>

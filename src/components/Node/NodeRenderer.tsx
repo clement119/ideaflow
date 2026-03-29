@@ -1,7 +1,7 @@
 import { memo, useRef, useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useStore } from '../../store/store';
-import type { INode, ICard, IComment } from '../../store/types';
+import type { INode, ICard } from '../../store/types';
 import { NodeDefault } from './NodeDefault';
 import { NodeIdea } from './NodeIdea';
 import { NodeNote } from './NodeNote';
@@ -27,7 +27,6 @@ interface Props {
 const NodeItem = memo(function NodeItem({ node, svgRef }: { node: INode; svgRef: React.RefObject<SVGSVGElement | null> }) {
   const [hovered, setHovered] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [labelDraft, setLabelDraft] = useState(node.label);
   const [editingHeight, setEditingHeight] = useState<number | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [nodeCommentsOpen, setNodeCommentsOpen] = useState(false);
@@ -37,6 +36,8 @@ const NodeItem = memo(function NodeItem({ node, svgRef }: { node: INode; svgRef:
   const didDrag = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const editStartRef = useRef<{ label: string; height: number } | null>(null);
+  // Ref tracks latest editing height without closing over stale state in confirmEdit
+  const editingHeightRef = useRef<number | null>(null);
   const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressPos = useRef({ x: 0, y: 0 });
 
@@ -129,7 +130,6 @@ const NodeItem = memo(function NodeItem({ node, svgRef }: { node: INode; svgRef:
   const handleDoubleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     editStartRef.current = { label: node.label, height: node.height };
-    setLabelDraft(node.label);
     setEditing(true);
     setCursorMode('text-edit');
   };
@@ -140,14 +140,17 @@ const NodeItem = memo(function NodeItem({ node, svgRef }: { node: INode; svgRef:
     setMenu({ x: e.clientX, y: e.clientY });
   };
 
-  // Resize textarea DOM directly (no store write) — keeps height purely local during editing
+  // Uncontrolled textarea auto-resize — only triggers React re-render when height actually changes
   const autoResize = useCallback(() => {
     const ta = textareaRef.current;
     if (!ta) return;
     ta.style.height = 'auto';
-    const newHeight = Math.max(44, ta.scrollHeight + 20);
+    const newH = Math.max(44, ta.scrollHeight + 20);
     ta.style.height = `${ta.scrollHeight}px`;
-    setEditingHeight(newHeight);  // local state only — zero store broadcasts
+    if (newH !== editingHeightRef.current) {
+      editingHeightRef.current = newH;
+      setEditingHeight(newH);  // only re-renders when a line wraps (height actually changes)
+    }
   }, []);
 
   useEffect(() => {
@@ -155,23 +158,25 @@ const NodeItem = memo(function NodeItem({ node, svgRef }: { node: INode; svgRef:
   }, [editing, autoResize]);
 
   const confirmEdit = () => {
+    // Read value directly from DOM — no stale closure issue, zero re-renders during typing
+    const label = textareaRef.current?.value ?? editStartRef.current?.label ?? node.label;
     const snap = editStartRef.current;
-    const finalHeight = editingHeight ?? node.height;
+    const finalH = editingHeightRef.current ?? node.height;
     const from: Partial<typeof node> = { label: snap?.label ?? node.label, height: snap?.height ?? node.height };
-    const to: Partial<typeof node> = { label: labelDraft, height: finalHeight };
+    const to: Partial<typeof node> = { label, height: finalH };
     if (from.label !== to.label || from.height !== to.height) {
       execute(new EditNodeCommand(node.id, from, to));
     }
     editStartRef.current = null;
+    editingHeightRef.current = null;
     setEditing(false);
     setEditingHeight(null);
     setCursorMode('idle');
   };
 
   const cancelEdit = () => {
-    // No store write needed — we never wrote height to store during editing
-    setLabelDraft(node.label);
     editStartRef.current = null;
+    editingHeightRef.current = null;
     setEditing(false);
     setEditingHeight(null);
     setCursorMode('idle');
@@ -243,8 +248,8 @@ const NodeItem = memo(function NodeItem({ node, svgRef }: { node: INode; svgRef:
             <textarea
               ref={textareaRef}
               autoFocus
-              value={labelDraft}
-              onChange={e => { setLabelDraft(e.target.value); autoResize(); }}
+              defaultValue={node.label}
+              onChange={autoResize}
               onFocus={autoResize}
               onKeyDown={e => {
                 if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); }
@@ -395,11 +400,7 @@ const NodeItem = memo(function NodeItem({ node, svgRef }: { node: INode; svgRef:
                 },
                 {
                   icon: '💬', label: 'Add Comment',
-                  onClick: () => {
-                    setNodeCommentsOpen(true);
-                    const c: IComment = { id: newId(), text: '', createdAt: Date.now() };
-                    execute(new AddCommentCommand(node.id, null, c));
-                  },
+                  onClick: () => setNodeCommentsOpen(true),
                 },
               ],
             },

@@ -6,9 +6,9 @@ const TIPS = [
   { icon: '✦', text: 'Double-click empty space to create a node' },
   { icon: '✦', text: 'Drag a handle on a node\'s edge to connect nodes' },
   { icon: '✦', text: 'Double-click a line to add a label' },
-  { icon: '✦', text: 'Right-click any object to add a sticky note' },
+  { icon: '✦', text: 'Right-click any node to add cards or comments' },
   { icon: '✦', text: 'Scroll to zoom · Space + drag to pan' },
-  { icon: '?', text: 'Press ? to see all keyboard shortcuts' },
+  { icon: '⌨', text: 'Press Ctrl+K to see all keyboard shortcuts' },
 ];
 
 export function NPCGuide() {

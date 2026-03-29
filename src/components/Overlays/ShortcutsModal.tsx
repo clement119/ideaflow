@@ -13,8 +13,7 @@ const SHORTCUTS = [
   { action: 'Fit to view', keys: '⌘0' },
   { action: 'Pan', keys: 'Space + drag' },
   { action: 'Delete', keys: '⌫' },
-  { action: 'Command palette', keys: '⌘K' },
-  { action: 'Shortcuts', keys: '?' },
+  { action: 'Shortcuts', keys: 'Ctrl+K' },
 ];
 
 export function ShortcutsModal() {
@@ -22,7 +21,7 @@ export function ShortcutsModal() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === '?' && !e.metaKey && !e.ctrlKey) {
+      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         setOpen(o => !o);
       }
@@ -79,7 +78,7 @@ export function ShortcutsModal() {
               </tbody>
             </table>
             <p style={{ margin: '12px 0 0', fontSize: 12, color: '#9ca3af', fontFamily: 'system-ui' }}>
-              Press ? or Esc to close
+              Press Ctrl+K or Esc to close
             </p>
           </motion.div>
         </motion.div>
