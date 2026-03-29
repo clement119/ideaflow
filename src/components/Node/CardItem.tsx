@@ -1,5 +1,5 @@
 import { memo, useState, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import type { ICard, IComment } from '../../store/types';
 import { ExpandArrow } from './ExpandArrow';
 import { CommentThread } from './CommentThread';
@@ -58,6 +58,7 @@ export const CardItem = memo(function CardItem({
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -8, scale: 0.95 }}
       transition={{ type: 'spring', stiffness: 340, damping: 28 }}
+      onClick={e => e.stopPropagation()}
       onPointerEnter={() => setHovered(true)}
       onPointerLeave={() => { setHovered(false); cancelLong(); }}
       onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setMenu({ x: e.clientX, y: e.clientY }); }}
@@ -151,34 +152,26 @@ export const CardItem = memo(function CardItem({
         </g>
       )}
 
-      {/* Comment thread — floats to the RIGHT, doesn't push cards below */}
-      <AnimatePresence>
-        {commentsOpen && (
-          <motion.g
-            key="thread"
-            initial={{ opacity: 0, x: -8 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -8 }}
-            transition={{ duration: 0.18 }}
+      {/* Comment thread — floats to the RIGHT, no transform animation (Safari foreignObject bug) */}
+      {commentsOpen && (
+        <g>
+          <foreignObject
+            x={nodeWidth + THREAD_OFFSET_X + 10}
+            y={0}
+            width={THREAD_W}
+            height={threadH}
+            style={{ overflow: 'visible' }}
           >
-            <foreignObject
-              x={nodeWidth + THREAD_OFFSET_X + 10}
-              y={0}
+            <CommentThread
+              comments={comments}
               width={THREAD_W}
-              height={threadH}
-              style={{ overflow: 'visible' }}
-            >
-              <CommentThread
-                comments={comments}
-                width={THREAD_W}
-                onAdd={c => { onAddComment(c); }}
-                onDelete={onDeleteComment}
-                onEdit={onEditComment}
-              />
-            </foreignObject>
-          </motion.g>
-        )}
-      </AnimatePresence>
+              onAdd={c => { onAddComment(c); }}
+              onDelete={onDeleteComment}
+              onEdit={onEditComment}
+            />
+          </foreignObject>
+        </g>
+      )}
 
       {/* Context menu */}
       {menu && (

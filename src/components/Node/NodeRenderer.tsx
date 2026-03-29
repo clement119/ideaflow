@@ -122,16 +122,20 @@ const NodeItem = memo(function NodeItem({ node, svgRef }: { node: INode; svgRef:
     if (didDrag.current) return;
     if (e.shiftKey) {
       toggleSelectNode(node.id);
-    } else {
-      selectNode(node.id);
+      return;
+    }
+    selectNode(node.id);
+    // Single click also starts editing immediately
+    if (!editing) {
+      editStartRef.current = { label: node.label, height: node.height };
+      setEditing(true);
+      setCursorMode('text-edit');
     }
   };
 
+  // Double-click is a no-op if already editing (single click already triggered it)
   const handleDoubleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    editStartRef.current = { label: node.label, height: node.height };
-    setEditing(true);
-    setCursorMode('text-edit');
   };
 
   const handleContextMenu = (e: React.MouseEvent) => {
@@ -347,43 +351,36 @@ const NodeItem = memo(function NodeItem({ node, svgRef }: { node: INode; svgRef:
         )}
 
         {/* Node-level comment thread — floats to the RIGHT */}
-        <AnimatePresence>
-          {nodeCommentsOpen && (
-            <motion.g
-              key="node-thread"
-              initial={{ opacity: 0, x: -8 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -8 }}
-              transition={{ duration: 0.18 }}
+        {/* Wrap in plain <g> (no transform animation) to avoid Safari foreignObject+CSS-transform bug */}
+        {nodeCommentsOpen && (
+          <g>
+            <foreignObject
+              x={displayNode.width + 26}
+              y={0}
+              width={220}
+              height={Math.max(120, comments.length * 52 + 60)}
+              style={{ overflow: 'visible' }}
             >
-              <foreignObject
-                x={displayNode.width + 26}
-                y={0}
+              <CommentThread
+                comments={comments}
                 width={220}
-                height={Math.max(120, comments.length * 52 + 60)}
-                style={{ overflow: 'visible' }}
-              >
-                <CommentThread
-                  comments={comments}
-                  width={220}
-                  onAdd={c => execute(new AddCommentCommand(node.id, null, c))}
-                  onDelete={id => {
-                    const cm = useStore.getState().nodes[node.id]?.comments?.find(c => c.id === id);
-                    if (cm) execute(new DeleteCommentCommand(node.id, null, cm));
-                  }}
-                  onEdit={(id, text) => {
-                    const current = useStore.getState().nodes[node.id];
-                    if (!current) return;
-                    execute(new EditNodeCommand(node.id,
-                      { comments: current.comments },
-                      { comments: (current.comments ?? []).map(c => c.id === id ? { ...c, text } : c) }
-                    ));
-                  }}
-                />
-              </foreignObject>
-            </motion.g>
-          )}
-        </AnimatePresence>
+                onAdd={c => execute(new AddCommentCommand(node.id, null, c))}
+                onDelete={id => {
+                  const cm = useStore.getState().nodes[node.id]?.comments?.find(c => c.id === id);
+                  if (cm) execute(new DeleteCommentCommand(node.id, null, cm));
+                }}
+                onEdit={(id, text) => {
+                  const current = useStore.getState().nodes[node.id];
+                  if (!current) return;
+                  execute(new EditNodeCommand(node.id,
+                    { comments: current.comments },
+                    { comments: (current.comments ?? []).map(c => c.id === id ? { ...c, text } : c) }
+                  ));
+                }}
+              />
+            </foreignObject>
+          </g>
+        )}
       </motion.g>
 
       {/* Context menu (right-click / long-press) */}
