@@ -19,6 +19,7 @@ import {
 } from '../../store/commands';
 import { useIsMobile } from '../../hooks/useMobile';
 import { newId } from '../../utils/ids';
+import { pickImageFile } from '../../utils/imageUtils';
 
 interface Props {
   svgRef: React.RefObject<SVGSVGElement | null>;
@@ -203,7 +204,7 @@ const NodeItem = memo(function NodeItem({ node, svgRef }: { node: INode; svgRef:
     : <NodeDefault node={displayNode} selected={isSelected} hovered={activeHover} />;
 
   // Height below bubble for expand arrow placement
-  const arrowCY = displayNode.height + (hasCards && !cardsExpanded ? 16 : 10);
+  const arrowCY = displayNode.height + 22;
 
   return (
     <g
@@ -388,6 +389,23 @@ const NodeItem = memo(function NodeItem({ node, svgRef }: { node: INode; svgRef:
                 {
                   icon: '🃏', label: 'Add Card',
                   onClick: addCard,
+                },
+                {
+                  icon: '🖼️', label: 'Add Photo',
+                  onClick: () => pickImageFile(({ dataUrl, aspectRatio }) => {
+                    const card: ICard = {
+                      id: newId(),
+                      title: '',
+                      caption: '',
+                      colour: node.colour,
+                      type: 'photo',
+                      imageDataUrl: dataUrl,
+                      imageAspectRatio: aspectRatio,
+                      cardWidth: node.width,
+                    };
+                    execute(new AddCardCommand(node.id, card));
+                    if (!cardsExpanded) execute(new ToggleCardsCommand(node.id, true));
+                  }),
                 },
                 {
                   icon: '💬', label: 'Add Comment',

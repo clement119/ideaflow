@@ -19,3 +19,14 @@ export const CLUSTER_COLOURS = [
 ] as const;
 
 export const DEFAULT_CLUSTER_COLOUR = CLUSTER_COLOURS[0];
+
+/** Blend a hex colour toward white by `factor` (0–1). Used to make cards lighter than their parent bubble. */
+export function lightenColour(hex: string, factor = 0.5): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const nr = Math.min(255, Math.round(r + (255 - r) * factor));
+  const ng = Math.min(255, Math.round(g + (255 - g) * factor));
+  const nb = Math.min(255, Math.round(b + (255 - b) * factor));
+  return `#${nr.toString(16).padStart(2, '0')}${ng.toString(16).padStart(2, '0')}${nb.toString(16).padStart(2, '0')}`;
+}

@@ -5,6 +5,7 @@ import { ExpandArrow } from './ExpandArrow';
 import { CommentPanelPortal } from './CommentPanelPortal';
 import { ContextMenu } from './ContextMenu';
 import { useIsMobile } from '../../hooks/useMobile';
+import { lightenColour } from '../../utils/colours';
 
 interface Props {
   card: ICard;
@@ -41,7 +42,7 @@ export const CardItem = memo(function CardItem({
   const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressPos = useRef({ x: 0, y: 0 });
 
-  const cardColour = card.colour ?? colour;
+  const cardColour = lightenColour(card.colour ?? colour);
   const comments = card.comments ?? [];
 
   const cancelLong = () => { if (longPressRef.current) clearTimeout(longPressRef.current); };

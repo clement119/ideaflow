@@ -27,6 +27,10 @@ export interface ICard {
   note?: string;
   noteVisible?: boolean;
   comments?: IComment[];
+  type?: 'text' | 'photo';
+  imageDataUrl?: string;       // base64 JPEG
+  imageAspectRatio?: number;   // naturalWidth / naturalHeight
+  cardWidth?: number;          // resizable (photo cards only)
 }
 
 export interface INode {
