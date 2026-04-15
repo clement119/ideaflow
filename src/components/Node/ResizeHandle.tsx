@@ -49,40 +49,44 @@ export function ResizeHandle({ node }: Props) {
     setCursorMode('idle');
   };
 
-  const hitSize = isMobile ? 32 : 10;
-  const hitOffset = isMobile ? 16 : 6;
+  // Desktop: 28×28 hit area; Mobile: 36×36 hit area
+  const hitSize = isMobile ? 36 : 28;
+  const hitOffset = hitSize / 2;
+
+  // Visible handle dimensions
+  const visW = 12;
+  const visH = 12;
+  const visX = node.width - visW + 2;
+  const visY = node.height - visH + 2;
 
   return (
     <g>
       {/* Visible handle */}
       <rect
-        x={node.width - 6}
-        y={node.height - 6}
-        width={10}
-        height={10}
-        rx={2}
+        x={visX}
+        y={visY}
+        width={visW}
+        height={visH}
+        rx={3}
         fill="#6366f1"
-        opacity={0.7}
+        opacity={0.85}
+        pointerEvents="none"
+      />
+      {/* Grip lines inside the visible handle */}
+      <line x1={visX + 4} y1={visY + visH - 3} x2={visX + visW - 3} y2={visY + 4} stroke="white" strokeWidth={1.5} strokeLinecap="round" pointerEvents="none" />
+      <line x1={visX + 7} y1={visY + visH - 3} x2={visX + visW - 3} y2={visY + 7} stroke="white" strokeWidth={1.5} strokeLinecap="round" pointerEvents="none" />
+      {/* Large invisible hit area (both desktop and mobile) */}
+      <rect
+        x={node.width - hitOffset}
+        y={node.height - hitOffset}
+        width={hitSize}
+        height={hitSize}
+        fill="transparent"
         style={{ cursor: 'se-resize' }}
-        pointerEvents={isMobile ? 'none' : 'auto'}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
       />
-      {/* Larger invisible hit area on touch devices */}
-      {isMobile && (
-        <rect
-          x={node.width - hitOffset}
-          y={node.height - hitOffset}
-          width={hitSize}
-          height={hitSize}
-          fill="transparent"
-          style={{ cursor: 'se-resize' }}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-        />
-      )}
     </g>
   );
 }

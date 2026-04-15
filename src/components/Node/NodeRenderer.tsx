@@ -13,7 +13,7 @@ import { CardStack } from './CardStack';
 import { CommentPanelPortal } from './CommentPanelPortal';
 import { ContextMenu } from './ContextMenu';
 import {
-  EditNodeCommand, MoveNodeCommand, DeleteNodeCommand,
+  EditNodeCommand, MoveNodeCommand, DeleteNodeCommand, DuplicateNodeCommand,
   AddCardCommand, EditCardCommand, DeleteCardCommand,
   ToggleCardsCommand, AddCommentCommand, DeleteCommentCommand,
 } from '../../store/commands';
@@ -191,6 +191,11 @@ const NodeItem = memo(function NodeItem({ node, svgRef }: { node: INode; svgRef:
   const addCard = () => {
     const card: ICard = { id: newId(), title: '', caption: '', colour: node.colour };
     execute(new AddCardCommand(node.id, card));
+  };
+
+  const duplicateNode = () => {
+    const copy: INode = { ...node, id: newId(), x: node.x + 40, y: node.y + 40 };
+    execute(new DuplicateNodeCommand(node, copy));
   };
 
   // During editing use local height so the bubble grows without any store writes
@@ -386,6 +391,10 @@ const NodeItem = memo(function NodeItem({ node, svgRef }: { node: INode; svgRef:
           groups={[
             {
               items: [
+                {
+                  icon: '⧉', label: 'Duplicate',
+                  onClick: duplicateNode,
+                },
                 {
                   icon: '🃏', label: 'Add Card',
                   onClick: addCard,
